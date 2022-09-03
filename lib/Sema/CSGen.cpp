@@ -3718,7 +3718,11 @@ namespace {
           base = memberTy;
           break;
         }
-        case KeyPathExpr::Component::Kind::UnresolvedFunction:
+        case KeyPathExpr::Component::Kind::UnresolvedFunction: {
+          auto *args = component.getSubscriptArgs();
+          base = addMemberRefConstraints(E, component.getExpression(), component.getUnresolvedDeclName(), FunctionRefKind::SingleApply, nullptr);
+          break;
+        }
         case KeyPathExpr::Component::Kind::UnresolvedSubscript:
         // Subscript should only appear in resolved ASTs, but we may need to
         // re-type-check the constraints during failure diagnosis.

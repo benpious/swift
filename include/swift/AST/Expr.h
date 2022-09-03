@@ -5623,6 +5623,7 @@ public:
       DeclNameOrRef(ConcreteDeclRef rd) : ResolvedDecl(rd) {}
     } Decl;
 
+    Expr *Expression;
     ArgumentList *SubscriptArgList;
     const ProtocolConformanceRef *SubscriptHashableConformancesData;
 
@@ -5634,7 +5635,7 @@ public:
     // Private constructor for subscript component.
     explicit Component(DeclNameOrRef decl, ArgumentList *argList,
                        ArrayRef<ProtocolConformanceRef> indexHashables,
-                       Kind kind, Type type, SourceLoc loc);
+                       Kind kind, Type type, SourceLoc loc, Expr *expression);
 
     // Private constructor for property or #keyPath dictionary key.
     explicit Component(DeclNameOrRef decl, Kind kind, Type type, SourceLoc loc)
@@ -5667,7 +5668,8 @@ public:
     static Component forUnresolvedSubscript(ASTContext &ctx,
                                             ArgumentList *argList);
     
-    static Component forUnresolvedFunction(ASTContext &ctx,
+    static Component forUnresolvedFunction(Expr *expression,
+                                           ASTContext &ctx,
                                            ArgumentList *argList);
 
     /// Create an unresolved optional force `!` component.
@@ -5832,12 +5834,12 @@ public:
       switch (getKind()) {
       case Kind::UnresolvedProperty:
       case Kind::DictionaryKey:
+      case Kind::UnresolvedFunction:
         return Decl.UnresolvedName;
 
       case Kind::Invalid:
       case Kind::Subscript:
       case Kind::UnresolvedSubscript:
-      case Kind::UnresolvedFunction:
       case Kind::OptionalChain:
       case Kind::OptionalWrap:
       case Kind::OptionalForce:
@@ -5922,6 +5924,10 @@ public:
     
     void setComponentType(Type t) {
       ComponentType = t;
+    }
+    
+    Expr *getExpression() const {
+      return Expression;
     }
   };
 

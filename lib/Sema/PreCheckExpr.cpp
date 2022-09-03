@@ -2111,8 +2111,7 @@ void PreCheckExpression::resolveKeyPathExpr(KeyPathExpr *KPE) {
 
         expr = SE->getBase();
       } else if (auto FE = dyn_cast<CallExpr>(expr)) {
-        printf("ben: test \n");
-        components.push_back(KeyPathExpr::Component::forUnresolvedFunction(
+        components.push_back(KeyPathExpr::Component::forUnresolvedFunction(FE,
             getASTContext(), FE->getArgs()));
         expr = dyn_cast<UnresolvedDotExpr>(FE->getFn())->getBase();
       } else if (auto BOE = dyn_cast<BindOptionalExpr>(expr)) {

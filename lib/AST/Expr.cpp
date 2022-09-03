@@ -2453,30 +2453,31 @@ KeyPathExpr::Component KeyPathExpr::Component::forSubscript(
     ASTContext &ctx, ConcreteDeclRef subscript, ArgumentList *argList,
     Type elementType, ArrayRef<ProtocolConformanceRef> indexHashables) {
   return Component(subscript, argList, indexHashables, Kind::Subscript,
-                   elementType, argList->getLParenLoc());
+                   elementType, argList->getLParenLoc(), nullptr);
 }
 
 KeyPathExpr::Component
 KeyPathExpr::Component::forUnresolvedSubscript(ASTContext &ctx,
                                                ArgumentList *argList) {
   return Component({}, argList, {}, Kind::UnresolvedSubscript, Type(),
-                   argList->getLParenLoc());
+                   argList->getLParenLoc(), nullptr);
 }
 
 KeyPathExpr::Component
-KeyPathExpr::Component::forUnresolvedFunction(ASTContext &ctx,
+KeyPathExpr::Component::forUnresolvedFunction(Expr *expression,
+                                              ASTContext &ctx,
                                               ArgumentList *argList) {
   return Component({}, argList, {}, Kind::UnresolvedFunction, Type(),
-                   argList->getLParenLoc());
+                   argList->getLParenLoc(), expression);
 }
 
 
 KeyPathExpr::Component::Component(
     DeclNameOrRef decl, ArgumentList *argList,
     ArrayRef<ProtocolConformanceRef> indexHashables, Kind kind, Type type,
-    SourceLoc loc)
+    SourceLoc loc, Expr *expression)
     : Decl(decl), SubscriptArgList(argList), KindValue(kind),
-      ComponentType(type), Loc(loc) {
+      ComponentType(type), Loc(loc), Expression(expression) {
   assert(kind == Kind::Subscript || kind == Kind::UnresolvedSubscript || kind == Kind::UnresolvedFunction);
   assert(argList);
   assert(argList->size() == indexHashables.size() || indexHashables.empty());

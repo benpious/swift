@@ -319,6 +319,7 @@ static bool buildObjCKeyPathString(KeyPathExpr *E,
       return false;
     case KeyPathExpr::Component::Kind::Invalid:
     case KeyPathExpr::Component::Kind::UnresolvedProperty:
+    case KeyPathExpr::Component::Kind::UnresolvedFunction:
     case KeyPathExpr::Component::Kind::UnresolvedSubscript:
     case KeyPathExpr::Component::Kind::CodeCompletion:
       // Don't bother building the key path string if the key path didn't even
@@ -5082,6 +5083,7 @@ namespace {
                                         resolvedComponents);
           break;
         }
+        case KeyPathExpr::Component::Kind::UnresolvedFunction:
         case KeyPathExpr::Component::Kind::UnresolvedSubscript: {
           buildKeyPathSubscriptComponent(solution.getOverloadChoice(calleeLoc),
                                          origComponent.getLoc(),

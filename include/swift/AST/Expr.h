@@ -5601,6 +5601,7 @@ public:
       Invalid,
       UnresolvedProperty,
       UnresolvedSubscript,
+      UnresolvedFunction,
       Property,
       Subscript,
       OptionalForce,
@@ -5665,6 +5666,9 @@ public:
     /// Create an unresolved component for a subscript.
     static Component forUnresolvedSubscript(ASTContext &ctx,
                                             ArgumentList *argList);
+    
+    static Component forUnresolvedFunction(ASTContext &ctx,
+                                           ArgumentList *argList);
 
     /// Create an unresolved optional force `!` component.
     static Component forUnresolvedOptionalForce(SourceLoc BangLoc) {
@@ -5763,6 +5767,7 @@ public:
         return true;
 
       case Kind::UnresolvedSubscript:
+      case Kind::UnresolvedFunction:
       case Kind::UnresolvedProperty:
       case Kind::Invalid:
       case Kind::CodeCompletion:
@@ -5775,6 +5780,7 @@ public:
       switch (getKind()) {
       case Kind::Subscript:
       case Kind::UnresolvedSubscript:
+      case Kind::UnresolvedFunction:
         return SubscriptArgList;
 
       case Kind::Invalid:
@@ -5806,6 +5812,7 @@ public:
         return {SubscriptHashableConformancesData, SubscriptArgList->size()};
 
       case Kind::UnresolvedSubscript:
+      case Kind::UnresolvedFunction:
       case Kind::Invalid:
       case Kind::OptionalChain:
       case Kind::OptionalWrap:
@@ -5830,6 +5837,7 @@ public:
       case Kind::Invalid:
       case Kind::Subscript:
       case Kind::UnresolvedSubscript:
+      case Kind::UnresolvedFunction:
       case Kind::OptionalChain:
       case Kind::OptionalWrap:
       case Kind::OptionalForce:
@@ -5851,6 +5859,7 @@ public:
       case Kind::Invalid:
       case Kind::UnresolvedProperty:
       case Kind::UnresolvedSubscript:
+      case Kind::UnresolvedFunction:
       case Kind::OptionalChain:
       case Kind::OptionalWrap:
       case Kind::OptionalForce:
@@ -5872,6 +5881,7 @@ public:
       case Kind::Invalid:
       case Kind::UnresolvedProperty:
       case Kind::UnresolvedSubscript:
+      case Kind::UnresolvedFunction:
       case Kind::OptionalChain:
       case Kind::OptionalWrap:
       case Kind::OptionalForce:
@@ -5892,6 +5902,7 @@ public:
         case Kind::Invalid:
         case Kind::UnresolvedProperty:
         case Kind::UnresolvedSubscript:
+        case Kind::UnresolvedFunction:
         case Kind::OptionalChain:
         case Kind::OptionalWrap:
         case Kind::OptionalForce:

@@ -2939,6 +2939,9 @@ public:
       case KeyPathExpr::Component::Kind::UnresolvedSubscript:
         PrintWithColorRAII(OS, ASTNodeColor) << "unresolved_subscript";
         break;
+      case KeyPathExpr::Component::Kind::UnresolvedFunction:
+          PrintWithColorRAII(OS, ASTNodeColor) << "unresolved_function";
+          break;
       case KeyPathExpr::Component::Kind::Identity:
         PrintWithColorRAII(OS, ASTNodeColor) << "identity";
         break;

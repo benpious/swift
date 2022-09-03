@@ -55,16 +55,11 @@ class Controller {
 
 struct S {
   var a: Int
-}
-
-struct Container<V> {
-  var v : V
-  init(_ v: V) {
-    self.v = v
+  
+  func test() {
+    
   }
-  func useKeyPath<V2: AnyObject>(_ keyPath: KeyPath<V, V2>) -> String {
-    return (v[keyPath: keyPath] as! MyLabel).text
-  }
+  
 }
 
 extension Container where V: Controller {
@@ -121,3 +116,5 @@ print(\Controller[[42], [42]])
 print(\Controller[array: [42]])
 // CHECK: \Controller.
 print(\Controller[array: [42], array2: [42]])
+let a = \Controller.test()
+print(a)

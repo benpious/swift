@@ -3718,7 +3718,7 @@ namespace {
           base = memberTy;
           break;
         }
-          
+        case KeyPathExpr::Component::Kind::UnresolvedFunction:
         case KeyPathExpr::Component::Kind::UnresolvedSubscript:
         // Subscript should only appear in resolved ASTs, but we may need to
         // re-type-check the constraints during failure diagnosis.

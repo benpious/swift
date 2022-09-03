@@ -2476,8 +2476,8 @@ KeyPathExpr::Component::Component(
     DeclNameOrRef decl, ArgumentList *argList,
     ArrayRef<ProtocolConformanceRef> indexHashables, Kind kind, Type type,
     SourceLoc loc, Expr *expression)
-    : Decl(decl), SubscriptArgList(argList), KindValue(kind),
-      ComponentType(type), Loc(loc), Expression(expression) {
+    : Decl(decl), Expression(expression), SubscriptArgList(argList), KindValue(kind),
+      ComponentType(type), Loc(loc) {
   assert(kind == Kind::Subscript || kind == Kind::UnresolvedSubscript || kind == Kind::UnresolvedFunction);
   assert(argList);
   assert(argList->size() == indexHashables.size() || indexHashables.empty());

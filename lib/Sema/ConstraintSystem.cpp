@@ -524,6 +524,7 @@ ConstraintLocator *ConstraintSystem::getCalleeLocator(
       // For a subscript the callee is given by 'component -> subscript member'.
       return getConstraintLocator(
           anchor, {*componentElt, ConstraintLocator::SubscriptMember});
+    case KeyPathExpr::Component::Kind::Function:
     case ComponentKind::UnresolvedFunction:
         return getConstraintLocator(
             anchor, {*componentElt, ConstraintLocator::ApplyFunction});

@@ -2471,6 +2471,13 @@ KeyPathExpr::Component::forUnresolvedFunction(Expr *expression,
                    argList->getLParenLoc(), expression);
 }
 
+KeyPathExpr::Component KeyPathExpr::Component::forFunction(
+    ASTContext &ctx, ConcreteDeclRef subscript, ArgumentList *argList,
+    Type elementType, ArrayRef<ProtocolConformanceRef> indexHashables) {
+  return Component(subscript, argList, indexHashables, Kind::Function,
+                   elementType, argList->getLParenLoc(), nullptr);
+}
+
 
 KeyPathExpr::Component::Component(
     DeclNameOrRef decl, ArgumentList *argList,
@@ -2478,7 +2485,7 @@ KeyPathExpr::Component::Component(
     SourceLoc loc, Expr *expression)
     : Decl(decl), Expression(expression), SubscriptArgList(argList), KindValue(kind),
       ComponentType(type), Loc(loc) {
-  assert(kind == Kind::Subscript || kind == Kind::UnresolvedSubscript || kind == Kind::UnresolvedFunction);
+  assert(kind == Kind::Subscript || kind == Kind::UnresolvedSubscript || kind == Kind::UnresolvedFunction || kind == Kind::Function);
   assert(argList);
   assert(argList->size() == indexHashables.size() || indexHashables.empty());
   SubscriptHashableConformancesData = indexHashables.empty()

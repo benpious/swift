@@ -3417,6 +3417,7 @@ private:
     for (auto &component : KP->getComponents()) {
       switch (component.getKind()) {
       case KeyPathExpr::Component::Kind::Property:
+      case KeyPathExpr::Component::Kind::Function:
       case KeyPathExpr::Component::Kind::Subscript: {
         auto decl = component.getDeclRef();
         auto loc = component.getLoc();

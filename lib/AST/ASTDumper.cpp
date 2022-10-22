@@ -2929,8 +2929,14 @@ public:
         printDeclRef(component.getDeclRef());
         PrintWithColorRAII(OS, DeclColor) << "'";
         break;
-      
-      case KeyPathExpr::Component::Kind::UnresolvedProperty:
+      case KeyPathExpr::Component::Kind::Function:
+          PrintWithColorRAII(OS, ASTNodeColor) << "function";
+          PrintWithColorRAII(OS, DeclColor) << " decl='";
+          printDeclRef(component.getDeclRef());
+          PrintWithColorRAII(OS, DeclColor) << "'";
+          break;
+
+        case KeyPathExpr::Component::Kind::UnresolvedProperty:
         PrintWithColorRAII(OS, ASTNodeColor) << "unresolved_property";
         PrintWithColorRAII(OS, IdentifierColor)
           << " decl_name='" << component.getUnresolvedDeclName() << "'";

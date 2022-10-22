@@ -12030,6 +12030,7 @@ ConstraintSystem::simplifyKeyPathConstraint(
     }
     case KeyPathExpr::Component::Kind::Property:
     case KeyPathExpr::Component::Kind::Subscript:
+    case KeyPathExpr::Component::Kind::Function:
     case KeyPathExpr::Component::Kind::UnresolvedProperty:
     case KeyPathExpr::Component::Kind::UnresolvedFunction:
     case KeyPathExpr::Component::Kind::UnresolvedSubscript: {

@@ -964,6 +964,70 @@ namespace {
       CS.addBindOverloadConstraint(tv, choice, locator, CurDC);
       return tv;
     }
+    
+    /// Add constraints for a subscript operation.
+    Type addKeyPathFunctionConstraints(
+        Expr *anchor, Type baseTy, DeclNameRef name, ArgumentList *argList,
+                                       SmallVectorImpl<TypeVariableType *> *addedTypeVars) {
+      // Locators used in this expression.
+      auto locator = CS.getConstraintLocator(anchor);
+      auto fnLocator =
+        CS.getConstraintLocator(locator,
+                                ConstraintLocator::ApplyFunction);
+      auto memberLocator =
+        CS.getConstraintLocator(locator,
+                                ConstraintLocator::Member);
+      auto resultLocator =
+        CS.getConstraintLocator(locator,
+                                ConstraintLocator::FunctionResult);
+
+      CS.associateArgumentList(resultLocator, argList); // not sure if should be member locator
+
+      Type outputTy = CS.createTypeVariable(resultLocator,
+                                       TVO_CanBindToLValue | TVO_CanBindToNoEscape);
+      if (addedTypeVars)
+        addedTypeVars->push_back(outputTy->castTo<TypeVariableType>());
+      // FIXME: This can only happen when diagnostics successfully type-checked
+      // sub-expression of the subscript and mutated AST, but under normal
+      // circumstances subscript should never have InOutExpr as a direct child
+      // until type checking is complete and expression is re-written.
+      // Proper fix for such situation requires preventing diagnostics from
+      // re-writing AST after successful type checking of the sub-expressions.
+      if (auto inoutTy = baseTy->getAs<InOutType>()) {
+        baseTy = LValueType::get(inoutTy->getObjectType());
+      }
+
+      // Add the member constraint for a function declaration.
+      // FIXME: weak name!
+      auto memberTy = CS.createTypeVariable(
+          memberLocator, TVO_CanBindToLValue | TVO_CanBindToNoEscape);
+      if (addedTypeVars)
+        addedTypeVars->push_back(memberTy);
+      CS.addValueMemberConstraint(baseTy, name,
+                                  memberTy, CurDC,
+                                  FunctionRefKind::DoubleApply,
+                                  /*outerAlternatives=*/{},
+                                  memberLocator);
+
+      SmallVector<AnyFunctionType::Param, 8> params;
+      getMatchingParams(argList, params);
+
+      // Add the constraint that the argument expression's type be convertible
+      // to the input type of the function.
+      CS.addConstraint(ConstraintKind::ApplicableFunction,
+                       FunctionType::get(params, outputTy),
+                       memberTy,
+                       fnLocator);
+
+      Type fixedOutputType =
+          CS.getFixedTypeRecursive(outputTy, /*wantRValue=*/false);
+      if (!fixedOutputType->isTypeVariableOrMember()) {
+        CS.setFavoredType(anchor, fixedOutputType.getPointer());
+        outputTy = fixedOutputType;
+      }
+
+      return outputTy;
+    }
 
     /// Add constraints for a subscript operation.
     Type addSubscriptConstraints(
@@ -3718,9 +3782,15 @@ namespace {
           base = memberTy;
           break;
         }
+        case KeyPathExpr::Component::Kind::Function:
         case KeyPathExpr::Component::Kind::UnresolvedFunction: {
-          auto *args = component.getSubscriptArgs();
-          base = addMemberRefConstraints(E, component.getExpression(), component.getUnresolvedDeclName(), FunctionRefKind::SingleApply, nullptr);
+          auto dotExpr = dyn_cast<UnresolvedDotExpr>(component.getExpression());
+          dotExpr->getBase()->setType(base);
+          base = addKeyPathFunctionConstraints(dotExpr,
+                                               base,
+                                               dotExpr->getName(),
+                                               component.getSubscriptArgs(),
+                                               &componentTypeVars);
           break;
         }
         case KeyPathExpr::Component::Kind::UnresolvedSubscript:

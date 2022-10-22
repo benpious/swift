@@ -4018,6 +4018,7 @@ RValue RValueEmitter::visitKeyPathExpr(KeyPathExpr *E, SGFContext C) {
   for (auto &component : E->getComponents()) {
     switch (auto kind = component.getKind()) {
     case KeyPathExpr::Component::Kind::Property:
+    case KeyPathExpr::Component::Kind::Function:
     case KeyPathExpr::Component::Kind::Subscript: {
       auto decl = cast<AbstractStorageDecl>(component.getDeclRef().getDecl());
 

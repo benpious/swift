@@ -218,6 +218,7 @@ Optional<Type> TypeChecker::checkObjCKeyPathExpr(DeclContext *dc,
                      diag::expr_unsupported_objc_key_path_component,
                      (unsigned)kind);
       continue;
+    case KeyPathExpr::Component::Kind::Function:
     case KeyPathExpr::Component::Kind::OptionalWrap:
     case KeyPathExpr::Component::Kind::Property:
     case KeyPathExpr::Component::Kind::Subscript:

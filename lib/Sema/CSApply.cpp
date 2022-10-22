@@ -312,6 +312,7 @@ static bool buildObjCKeyPathString(KeyPathExpr *E,
     }
     case KeyPathExpr::Component::Kind::TupleElement:
     case KeyPathExpr::Component::Kind::Subscript:
+    case KeyPathExpr::Component::Kind::Function:
       // Subscripts and tuples aren't generally represented in KVC.
       // TODO: There are some subscript forms we could map to KVC, such as
       // when indexing a Dictionary or NSDictionary by string, or when applying
@@ -5058,7 +5059,8 @@ namespace {
         bool isDynamicMember = false;
         // If this is an unresolved link, make sure we resolved it.
         if (kind == KeyPathExpr::Component::Kind::UnresolvedProperty ||
-            kind == KeyPathExpr::Component::Kind::UnresolvedSubscript) {
+            kind == KeyPathExpr::Component::Kind::UnresolvedSubscript ||
+            kind == KeyPathExpr::Component::Kind::UnresolvedFunction) {
           auto foundDecl = solution.getOverloadChoiceIfAvailable(calleeLoc);
           if (!foundDecl) {
             // If we couldn't resolve the component, leave it alone.
@@ -5083,7 +5085,6 @@ namespace {
                                         resolvedComponents);
           break;
         }
-        case KeyPathExpr::Component::Kind::UnresolvedFunction:
         case KeyPathExpr::Component::Kind::UnresolvedSubscript: {
           buildKeyPathSubscriptComponent(solution.getOverloadChoice(calleeLoc),
                                          origComponent.getLoc(),
@@ -5091,6 +5092,13 @@ namespace {
                                          componentLocator, resolvedComponents);
           break;
         }
+          case KeyPathExpr::Component::Kind::UnresolvedFunction: {
+            buildKeyPathFunctionComponent(solution.getOverloadChoice(calleeLoc),
+                                          origComponent.getLoc(),
+                                          origComponent.getSubscriptArgs(),
+                                          componentLocator, resolvedComponents);
+            break;
+          }
         case KeyPathExpr::Component::Kind::OptionalChain: {
           didOptionalChain = true;
           // Chaining always forces the element to be an rvalue.
@@ -5134,6 +5142,7 @@ namespace {
           resolvedComponents.push_back(component);
           break;
         }
+        case KeyPathExpr::Component::Kind::Function:
         case KeyPathExpr::Component::Kind::Property:
         case KeyPathExpr::Component::Kind::Subscript:
         case KeyPathExpr::Component::Kind::OptionalWrap:
@@ -5326,6 +5335,83 @@ namespace {
 
       auto unwrapCount =
           getIUOForceUnwrapCount(locator, IUOReferenceKind::Value);
+      for (unsigned i = 0; i < unwrapCount; ++i)
+        buildKeyPathOptionalForceComponent(components);
+    }
+    
+    void buildKeyPathFunctionComponent(
+        const SelectedOverload &overload, SourceLoc componentLoc,
+        ArgumentList *args, ConstraintLocator *locator,
+        SmallVectorImpl<KeyPathExpr::Component> &components) {
+      auto &ctx = cs.getASTContext();
+      auto subscript = cast<FuncDecl>(overload.choice.getDecl());
+      auto memberLoc = cs.getCalleeLocator(locator);
+
+      // Compute substitutions to refer to the member.
+      auto ref = resolveConcreteDeclRef(subscript, memberLoc);
+      
+      // If this is a @dynamicMemberLookup reference to resolve a property
+      // through the subscript(dynamicMember:) member, restore the
+      // openedType and origComponent to its full reference as if the user
+      // wrote out the subscript manually.
+      if (overload.choice.isAnyDynamicMemberLookup()) {
+        auto indexType = getTypeOfDynamicMemberIndex(overload);
+        Expr *argExpr = nullptr;
+        if (overload.choice.isKeyPathDynamicMemberLookup()) {
+          argExpr = buildKeyPathDynamicMemberArgExpr(
+              indexType->castTo<BoundGenericType>(), componentLoc, memberLoc);
+        } else {
+          auto fieldName = overload.choice.getName().getBaseIdentifier().str();
+          argExpr = buildDynamicMemberLookupArgExpr(fieldName, componentLoc,
+                                                    indexType);
+        }
+        args = ArgumentList::forImplicitSingle(ctx, ctx.Id_dynamicMember,
+                                               argExpr);
+        // Record the implicit subscript expr's parameter bindings and matching
+        // direction as `coerceCallArguments` requires them.
+        solution.recordSingleArgMatchingChoice(locator);
+      }
+
+      auto subscriptType =
+          simplifyType(overload.adjustedOpenedType)->castTo<AnyFunctionType>();
+      auto resolvedTy = subscriptType->getResult();
+
+      // Coerce the indices to the type the subscript expects.
+      args = coerceCallArguments(
+          args, subscriptType, ref, /*applyExpr*/ nullptr,
+          cs.getConstraintLocator(locator, ConstraintLocator::ApplyArgument),
+          /*appliedPropertyWrappers*/ {});
+
+      // We need to be able to hash the captured index values in order for
+      // KeyPath itself to be hashable, so check that all of the subscript
+      // index components are hashable and collect their conformances here.
+      SmallVector<ProtocolConformanceRef, 4> conformances;
+
+      auto hashable = ctx.getProtocol(KnownProtocolKind::Hashable);
+
+      auto fnType = overload.adjustedOpenedType->castTo<FunctionType>();
+      SmallVector<Identifier, 4> newLabels;
+      for (auto &param : fnType->getParams()) {
+        newLabels.push_back(param.getLabel());
+
+        auto indexType = simplifyType(param.getParameterType());
+        // Index type conformance to Hashable protocol has been
+        // verified by the solver, we just need to get it again
+        // with all of the generic parameters resolved.
+        auto hashableConformance =
+          TypeChecker::conformsToProtocol(indexType, hashable,
+                                          dc->getParentModule());
+        assert(hashableConformance);
+
+        conformances.push_back(hashableConformance);
+      }
+
+      auto comp = KeyPathExpr::Component::forFunction(
+          ctx, ref, args, resolvedTy, ctx.AllocateCopy(conformances));
+      components.push_back(comp);
+
+      auto unwrapCount =
+          getIUOForceUnwrapCount(memberLoc, IUOReferenceKind::ReturnValue);
       for (unsigned i = 0; i < unwrapCount; ++i)
         buildKeyPathOptionalForceComponent(components);
     }

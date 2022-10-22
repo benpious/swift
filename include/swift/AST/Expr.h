@@ -5602,6 +5602,7 @@ public:
       UnresolvedProperty,
       UnresolvedSubscript,
       UnresolvedFunction,
+      Function,
       Property,
       Subscript,
       OptionalForce,
@@ -5702,6 +5703,12 @@ public:
                  ArgumentList *argList, Type elementType,
                  ArrayRef<ProtocolConformanceRef> indexHashables);
 
+    /// Create a component for a function.
+    static Component
+    forFunction(ASTContext &ctx, ConcreteDeclRef subscript,
+                 ArgumentList *argList, Type elementType,
+                 ArrayRef<ProtocolConformanceRef> indexHashables);
+
     /// Create an optional-forcing `!` component.
     static Component forOptionalForce(Type forcedType, SourceLoc bangLoc) {
       return Component(Kind::OptionalForce, forcedType, bangLoc);
@@ -5759,6 +5766,7 @@ public:
 
       switch (getKind()) {
       case Kind::Subscript:
+      case Kind::Function:
       case Kind::OptionalChain:
       case Kind::OptionalWrap:
       case Kind::OptionalForce:
@@ -5781,6 +5789,7 @@ public:
     ArgumentList *getSubscriptArgs() const {
       switch (getKind()) {
       case Kind::Subscript:
+      case Kind::Function:
       case Kind::UnresolvedSubscript:
       case Kind::UnresolvedFunction:
         return SubscriptArgList;
@@ -5808,6 +5817,7 @@ public:
     ArrayRef<ProtocolConformanceRef>
     getSubscriptIndexHashableConformances() const {
       switch (getKind()) {
+      case Kind::Function:
       case Kind::Subscript:
         if (!SubscriptHashableConformancesData)
           return {};
@@ -5839,6 +5849,7 @@ public:
 
       case Kind::Invalid:
       case Kind::Subscript:
+      case Kind::Function:
       case Kind::UnresolvedSubscript:
       case Kind::OptionalChain:
       case Kind::OptionalWrap:
@@ -5854,6 +5865,7 @@ public:
 
     bool hasDeclRef() const {
       switch (getKind()) {
+      case Kind::Function:
       case Kind::Property:
       case Kind::Subscript:
         return true;
@@ -5876,6 +5888,7 @@ public:
 
     ConcreteDeclRef getDeclRef() const {
       switch (getKind()) {
+      case Kind::Function:
       case Kind::Property:
       case Kind::Subscript:
         return Decl.ResolvedDecl;
@@ -5901,6 +5914,7 @@ public:
         case Kind::TupleElement:
           return TupleIndex;
                 
+        case Kind::Function:
         case Kind::Invalid:
         case Kind::UnresolvedProperty:
         case Kind::UnresolvedSubscript:

@@ -56,7 +56,7 @@ class Controller {
 struct S {
   var a: Int
   
-  func test() {
+  func test(a: Int) {
     
   }
   

@@ -432,6 +432,7 @@ ASTWalker::PreWalkResult<Expr *> NameMatcher::walkToExprPre(Expr *E) {
           case KeyPathExpr::Component::Kind::OptionalWrap:
           case KeyPathExpr::Component::Kind::UnresolvedSubscript:
           case KeyPathExpr::Component::Kind::UnresolvedFunction:
+          case KeyPathExpr::Component::Kind::Function:
           case KeyPathExpr::Component::Kind::Subscript:
           case KeyPathExpr::Component::Kind::Identity:
           case KeyPathExpr::Component::Kind::TupleElement:

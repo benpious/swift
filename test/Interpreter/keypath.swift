@@ -24,5 +24,5 @@ class Controller {
 let a = \Controller.test()
 // CHECK: \Controller.test
 print(a)
-// CHECK: \Controller.test
+// CHECK: \Controller.testnkdajkfdal
 print(\Controller.test2(a: 8))

@@ -968,9 +968,9 @@ namespace {
     /// Add constraints for a subscript operation.
     Type addKeyPathFunctionConstraints(
         Expr *anchor, Type baseTy, DeclNameRef name, ArgumentList *argList,
+                                       ConstraintLocator *locator,
                                        SmallVectorImpl<TypeVariableType *> *addedTypeVars) {
       // Locators used in this expression.
-      auto locator = CS.getConstraintLocator(anchor);
       auto fnLocator =
         CS.getConstraintLocator(locator,
                                 ConstraintLocator::ApplyFunction);
@@ -3785,11 +3785,11 @@ namespace {
         case KeyPathExpr::Component::Kind::Function:
         case KeyPathExpr::Component::Kind::UnresolvedFunction: {
           auto dotExpr = dyn_cast<UnresolvedDotExpr>(component.getExpression());
-          dotExpr->getBase()->setType(base);
           base = addKeyPathFunctionConstraints(dotExpr,
                                                base,
                                                dotExpr->getName(),
                                                component.getSubscriptArgs(),
+                                               memberLocator,
                                                &componentTypeVars);
           break;
         }

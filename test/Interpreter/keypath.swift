@@ -13,9 +13,16 @@ class Controller {
     func test() {
         
     }
+    
+    func test2(a: Int) -> Int {
+        a
+    }
+    
 }
 
 
 let a = \Controller.test()
 // CHECK: \Controller.test
 print(a)
+// CHECK: \Controller.test
+print(\Controller.test2(a: 8))

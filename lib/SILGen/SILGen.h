@@ -431,6 +431,17 @@ public:
   bool canStorageUseStoredKeyPathComponent(AbstractStorageDecl *decl,
                                            ResilienceExpansion expansion);
 
+    KeyPathPatternComponent
+    emitKeyPathComponentForFunctionDecl(SILLocation loc,
+                                        GenericEnvironment *genericEnv,
+                                        FuncDecl *decl,
+                                        ResilienceExpansion expansion,
+                                        unsigned &baseOperand,
+                                        bool &needsGenericContext,
+                                        SubstitutionMap subs,
+                                        ArrayRef<ProtocolConformanceRef> indexHashables,
+                                        CanType baseTy
+                                        );
   KeyPathPatternComponent
   emitKeyPathComponentForDecl(SILLocation loc,
                               GenericEnvironment *genericEnv,

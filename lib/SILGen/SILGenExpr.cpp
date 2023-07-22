@@ -4119,7 +4119,7 @@ RValue RValueEmitter::visitKeyPathExpr(KeyPathExpr *E, SGFContext C) {
         auto decl = cast<FuncDecl>(component.getDeclRef().getDecl());
         unsigned numOperands = operands.size();
         loweredComponents.push_back(
-        SGF.SGM.emitKeyPathComponentForFunction(SILLocation(E),
+        SGF.SGM.emitKeyPathComponentForFunctionDecl(SILLocation(E),
                                                 SGF.F.getGenericEnvironment(),
                                                 SGF.F.getResilienceExpansion(),
                                                 numOperands,

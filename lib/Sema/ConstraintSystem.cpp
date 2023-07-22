@@ -527,7 +527,7 @@ ConstraintLocator *ConstraintSystem::getCalleeLocator(
     case KeyPathExpr::Component::Kind::Function:
     case ComponentKind::UnresolvedFunction:
         return getConstraintLocator(
-            anchor, {*componentElt, ConstraintLocator::ApplyFunction});
+            anchor, {*componentElt, ConstraintLocator::Member});
     case ComponentKind::UnresolvedProperty:
     case ComponentKind::Property:
       // For a property, the choice is just given by the component.
@@ -6403,7 +6403,9 @@ ConstraintLocator *ConstraintSystem::getArgumentLocator(Expr *expr) {
 
   ConstraintLocator *loc = nullptr;
   if (auto *KP = dyn_cast<KeyPathExpr>(application)) {
+      printf("BEN: looking for component w/ subscript");
     auto idx = KP->findComponentWithSubscriptArg(expr);
+      printf("BEN: found component w/ subscript");
     if (!idx)
       return nullptr;
     loc = getConstraintLocator(KP, {LocatorPathElt::KeyPathComponent(*idx)});

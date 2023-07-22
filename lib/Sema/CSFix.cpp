@@ -1256,12 +1256,6 @@ bool AllowInvalidRefInKeyPath::isEqual(const ConstraintFix *other) const {
 AllowInvalidRefInKeyPath *
 AllowInvalidRefInKeyPath::forRef(ConstraintSystem &cs, ValueDecl *member,
                                  ConstraintLocator *locator) {
-  // Referencing (instance or static) methods in key path is
-  // not currently allowed.
-  if (isa<FuncDecl>(member))
-    return AllowInvalidRefInKeyPath::create(cs, RefKind::Method, member,
-                                            locator);
-
   // Referencing enum cases in key path is not currently allowed.
   if (isa<EnumElementDecl>(member)) {
     return AllowInvalidRefInKeyPath::create(cs, RefKind::EnumCase, member,

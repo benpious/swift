@@ -981,7 +981,7 @@ namespace {
         CS.getConstraintLocator(locator,
                                 ConstraintLocator::FunctionResult);
 
-      CS.associateArgumentList(resultLocator, argList); // not sure if should be member locator
+      CS.associateArgumentList(memberLocator, argList);
 
       Type outputTy = CS.createTypeVariable(resultLocator,
                                        TVO_CanBindToLValue | TVO_CanBindToNoEscape);

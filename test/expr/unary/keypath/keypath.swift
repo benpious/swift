@@ -1056,14 +1056,18 @@ func testSyntaxErrors() {
 
 // https://github.com/apple/swift/issues/56996
 func f_56996() {
-  _ = \Int.byteSwapped.signum() // expected-error {{invalid component of Swift key path}}
-  _ = \Int.byteSwapped.init() // expected-error {{invalid component of Swift key path}}
   _ = \Int // expected-error {{key path must have at least one component}}
   _ = \Int? // expected-error {{key path must have at least one component}}
   _ = \Int. // expected-error {{invalid component of Swift key path}}
   // expected-error@-1 {{expected member name following '.'}}
 }
 
+         
+func test_parse_functions() {
+  _ = \Int.byteSwapped.signum()
+  _ = \Int.byteSwapped.init()
+}
+         
 // https://github.com/apple/swift/issues/55805
 // Key-path missing optional crashes compiler: Inactive constraints left over?
 func f_55805() {

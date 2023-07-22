@@ -9188,6 +9188,19 @@ static bool isForKeyPathSubscript(ConstraintSystem &cs,
   return false;
 }
 
+static bool isForKeyPathFunction(ConstraintSystem &cs,
+                                  ConstraintLocator *locator) {
+  if (!locator || !locator->getAnchor())
+    return false;
+
+  if (auto *SE = getAsExpr<CallExpr>(locator->getAnchor())) {
+    return SE->getArgs()->isUnary() &&
+           SE->getArgs()->getLabel(0) == cs.getASTContext().Id_keyPath;
+  }
+  return false;
+}
+
+
 static bool mayBeForKeyPathSubscriptWithoutLabel(ConstraintSystem &cs,
                                                  ConstraintLocator *locator) {
   if (!locator || !locator->getAnchor())
@@ -9199,6 +9212,19 @@ static bool mayBeForKeyPathSubscriptWithoutLabel(ConstraintSystem &cs,
   }
   return false;
 }
+
+static bool mayBeForKeyPathFunctionWithoutLabel(ConstraintSystem &cs,
+                                                 ConstraintLocator *locator) {
+  if (!locator || !locator->getAnchor())
+    return false;
+
+  if (auto *SE = getAsExpr<CallExpr>(locator->getAnchor())) {
+    if (auto *unary = SE->getArgs()->getUnlabeledUnaryExpr())
+      return isa<KeyPathExpr>(unary) || isa<CodeCompletionExpr>(unary);
+  }
+  return false;
+}
+
 
 /// Determine whether all of the given candidate overloads
 /// found through conditional conformances of a given base type.
@@ -9327,13 +9353,18 @@ performMemberLookup(ConstraintKind constraintKind, DeclNameRef memberName,
   // subscript without a `keyPath:` label. Add it to the result so that it
   // can be caught by the missing argument label checking later.
   if (isForKeyPathSubscript(*this, memberLocator) ||
+      isForKeyPathFunction(*this, memberLocator) ||
       (mayBeForKeyPathSubscriptWithoutLabel(*this, memberLocator) &&
+       includeInaccessibleMembers) ||
+      (mayBeForKeyPathFunctionWithoutLabel(*this, memberLocator) &&
        includeInaccessibleMembers)) {
     if (baseTy->isAnyObject()) {
+        printf("BEN: baseTy->isAnyObject");
       result.addUnviable(
           OverloadChoice(baseTy, OverloadChoiceKind::KeyPathApplication),
           MemberLookupResult::UR_KeyPathWithAnyObjectRootType);
     } else {
+        printf("BEN: adding viable candidate");
       result.ViableCandidates.push_back(
           OverloadChoice(baseTy, OverloadChoiceKind::KeyPathApplication));
     }
@@ -11908,9 +11939,12 @@ ConstraintSystem::simplifyKeyPathConstraint(
     }
 
     if (auto fnTy = type->getAs<FunctionType>()) {
+        printf("BEN: is function");
       if (fnTy->getParams().size() != 1) {
-        if (!shouldAttemptFixes())
-          return false;
+          if (!shouldAttemptFixes()) {
+              printf("BEN: not attempting fixes");
+              return false;
+          }
 
         resolveAsMultiArgFuncFix = true;
         auto *fix = AllowMultiArgFuncKeyPathMismatch::create(
@@ -12045,7 +12079,9 @@ ConstraintSystem::simplifyKeyPathConstraint(
       // type, so continue through components to create new constraint at the
       // end.
       if (!overload) {
+          printf("BEN: no overloads\n");
         if (flags.contains(TMF_GenerateConstraints)) {
+            printf("BEN: generated constraints\n");
           anyComponentsUnresolved = true;
           continue;
         }
@@ -12076,7 +12112,10 @@ ConstraintSystem::simplifyKeyPathConstraint(
           capability = ReadOnly;
           continue;
         }
-      }
+        } else if (isa<FuncDecl>(choice.getDecl())) {
+            capability = ReadOnly;
+            continue;
+        }
 
       if (!storage)
         return SolutionKind::Error;
@@ -12155,9 +12194,11 @@ ConstraintSystem::simplifyKeyPathConstraint(
              (definitelyKeyPathType && capability == ReadOnly)) {
     auto resolvedKPTy =
       BoundGenericType::get(kpDecl, nullptr, {rootTy, valueTy});
+      printf("BEN: bind\n");
     return matchTypes(keyPathTy, resolvedKPTy, ConstraintKind::Bind, subflags,
                       loc);
   } else {
+      printf("BEN: add unsolved\n");
     addUnsolvedConstraint(Constraint::create(*this, ConstraintKind::KeyPath,
                                              keyPathTy, rootTy, valueTy,
                                              locator.getBaseLocator(),

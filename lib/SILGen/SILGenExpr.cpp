@@ -3708,6 +3708,41 @@ getIdForKeyPathComponentComputedProperty(SILGenModule &SGM,
 }
 
 static void
+lowerKeyPathFunctionArgumentTypes(
+                 SILGenModule &SGM,
+                 SmallVectorImpl<IndexTypePair> &indexPatterns,
+                 FuncDecl *function,
+                 SubstitutionMap subscriptSubs,
+                 ResilienceExpansion expansion,
+                 bool &needsGenericContext) {
+  // Capturing an index value dependent on the generic context means we
+  // need the generic context captured in the key path.
+  auto subscriptSubstTy = function->getInterfaceType();
+  SubstitutionMap subMap;
+  auto sig = function->getGenericSignature();
+  if (sig) {
+    subscriptSubstTy = subscriptSubstTy.subst(subscriptSubs);
+  }
+  needsGenericContext |= subscriptSubstTy->hasArchetype();
+
+  for (auto *index : *function->getParameters()) {
+    auto indexTy = index->getInterfaceType();
+    if (sig) {
+      indexTy = indexTy.subst(subscriptSubs);
+    }
+
+    auto indexLoweredTy = SGM.Types.getLoweredType(
+        AbstractionPattern::getOpaque(), indexTy,
+        TypeExpansionContext::noOpaqueTypeArchetypesSubstitution(expansion));
+    indexLoweredTy = indexLoweredTy.mapTypeOutOfContext();
+    indexPatterns.push_back({indexTy->mapTypeOutOfContext()
+                                    ->getCanonicalType(),
+                             indexLoweredTy});
+  }
+}
+
+
+static void
 lowerKeyPathSubscriptIndexTypes(
                  SILGenModule &SGM,
                  SmallVectorImpl<IndexTypePair> &indexPatterns,
@@ -3757,6 +3792,69 @@ lowerKeyPathSubscriptIndexPatterns(
 
     indexPatterns.push_back({baseOperand++, formalTy, loweredTy, hashable});
   }
+}
+
+KeyPathPatternComponent
+SILGenModule::emitKeyPathComponentForFunctionDecl(SILLocation loc,
+                                                  GenericEnvironment *genericEnv,
+                                                  FuncDecl *decl,
+                                                  ResilienceExpansion expansion,
+                                                  unsigned &baseOperand,
+                                                  bool &needsGenericContext,
+                                                  SubstitutionMap subs,
+                                              ArrayRef<ProtocolConformanceRef> indexHashables,
+                                                  CanType baseTy
+                                              ) {
+    // TODO: not clear if the resilience/external stuff matters in the
+    // context of functions.
+    AbstractStorageDecl *externalDecl = nullptr;
+    SubstitutionMap externalSubs;
+    // TODO: organizing comment: stuff that we maybe care about begins here
+    auto baseSubscriptTy =
+      decl->getInterfaceType()->castTo<AnyFunctionType>();
+    if (auto genSubscriptTy = baseSubscriptTy->getAs<GenericFunctionType>())
+      baseSubscriptTy = genSubscriptTy->substGenericArgs(subs);
+    auto baseSubscriptInterfaceTy = cast<AnyFunctionType>(
+      baseSubscriptTy->mapTypeOutOfContext()->getCanonicalType());
+
+    auto componentTy = baseSubscriptInterfaceTy.getResult();
+    if (decl->getAttrs().hasAttribute<OptionalAttr>()) {
+      // The component type for an @objc optional requirement needs to be
+      // wrapped in an optional
+      componentTy = OptionalType::get(componentTy)->getCanonicalType();
+    }
+    // TODO: lower argument types (lowerKeyPathSubscriptIndexTypes equivalent)
+    SmallVector<IndexTypePair, 4> indexTypes;
+    lowerKeyPathFunctionArgumentTypes(*this, indexTypes,
+                                    decl, subs,
+                                    expansion,
+                                    needsGenericContext);
+    SILFunction *indexEquals = nullptr, *indexHash = nullptr;
+    SmallVector<KeyPathPatternComponent::Index, 4> indexPatterns;
+    lowerKeyPathSubscriptIndexPatterns(indexPatterns,
+                                       indexTypes, indexHashables,
+                                       baseOperand);
+    getOrCreateKeyPathEqualsAndHash(*this, loc,
+             needsGenericContext ? genericEnv : nullptr,
+             expansion,
+             indexPatterns,
+             indexEquals, indexHash);
+    auto indexPatternsCopy = getASTContext().AllocateCopy(indexPatterns);
+    auto getter = getOrCreateKeyPathGetter(*this,
+             decl, subs,
+             needsGenericContext ? genericEnv : nullptr,
+             expansion,
+             indexTypes,
+             baseTy, componentTy);
+    auto id = KeyPathPatternComponent::ComputedPropertyId(getFunction(decl, NotForDefinition));
+    return KeyPathPatternComponent::forComputedGettableProperty(id,
+                                                         getter,
+                                                         indexPatternsCopy,
+                                                         indexEquals,
+                                                         indexHash,
+                                                         externalDecl,
+                                                         externalSubs,
+                                                         componentTy);
 }
 
 KeyPathPatternComponent
@@ -4017,11 +4115,25 @@ RValue RValueEmitter::visitKeyPathExpr(KeyPathExpr *E, SGFContext C) {
 
   for (auto &component : E->getComponents()) {
     switch (auto kind = component.getKind()) {
+    case KeyPathExpr::Component::Kind::Function: {
+        auto decl = cast<FuncDecl>(component.getDeclRef().getDecl());
+        unsigned numOperands = operands.size();
+        loweredComponents.push_back(
+        SGF.SGM.emitKeyPathComponentForFunction(SILLocation(E),
+                                                SGF.F.getGenericEnvironment(),
+                                                SGF.F.getResilienceExpansion(),
+                                                numOperands,
+                                                needsGenericContext,
+                                                component.getDeclRef().getSubstitutions(),
+                                                decl,
+                                                component.getSubscriptIndexHashableConformances(),
+                                                baseTy
+                                                ));
+        baseTy = loweredComponents.back().getComponentType();
+    }
     case KeyPathExpr::Component::Kind::Property:
-    case KeyPathExpr::Component::Kind::Function:
     case KeyPathExpr::Component::Kind::Subscript: {
       auto decl = cast<AbstractStorageDecl>(component.getDeclRef().getDecl());
-
       unsigned numOperands = operands.size();
       loweredComponents.push_back(
         SGF.SGM.emitKeyPathComponentForDecl(SILLocation(E),

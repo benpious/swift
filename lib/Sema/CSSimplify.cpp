@@ -9359,12 +9359,10 @@ performMemberLookup(ConstraintKind constraintKind, DeclNameRef memberName,
       (mayBeForKeyPathFunctionWithoutLabel(*this, memberLocator) &&
        includeInaccessibleMembers)) {
     if (baseTy->isAnyObject()) {
-        printf("BEN: baseTy->isAnyObject");
       result.addUnviable(
           OverloadChoice(baseTy, OverloadChoiceKind::KeyPathApplication),
           MemberLookupResult::UR_KeyPathWithAnyObjectRootType);
     } else {
-        printf("BEN: adding viable candidate");
       result.ViableCandidates.push_back(
           OverloadChoice(baseTy, OverloadChoiceKind::KeyPathApplication));
     }
@@ -11939,10 +11937,8 @@ ConstraintSystem::simplifyKeyPathConstraint(
     }
 
     if (auto fnTy = type->getAs<FunctionType>()) {
-        printf("BEN: is function");
       if (fnTy->getParams().size() != 1) {
           if (!shouldAttemptFixes()) {
-              printf("BEN: not attempting fixes");
               return false;
           }
 
@@ -12079,9 +12075,7 @@ ConstraintSystem::simplifyKeyPathConstraint(
       // type, so continue through components to create new constraint at the
       // end.
       if (!overload) {
-          printf("BEN: no overloads\n");
         if (flags.contains(TMF_GenerateConstraints)) {
-            printf("BEN: generated constraints\n");
           anyComponentsUnresolved = true;
           continue;
         }
@@ -12194,11 +12188,9 @@ ConstraintSystem::simplifyKeyPathConstraint(
              (definitelyKeyPathType && capability == ReadOnly)) {
     auto resolvedKPTy =
       BoundGenericType::get(kpDecl, nullptr, {rootTy, valueTy});
-      printf("BEN: bind\n");
     return matchTypes(keyPathTy, resolvedKPTy, ConstraintKind::Bind, subflags,
                       loc);
   } else {
-      printf("BEN: add unsolved\n");
     addUnsolvedConstraint(Constraint::create(*this, ConstraintKind::KeyPath,
                                              keyPathTy, rootTy, valueTy,
                                              locator.getBaseLocator(),

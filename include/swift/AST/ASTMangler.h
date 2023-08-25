@@ -304,6 +304,11 @@ public:
                                      StringRef origFnName, unsigned bbId,
                                      AutoDiffLinearMapKind linearMapKind,
                                      const AutoDiffConfig &config);
+    std::string mangleKeyPathFunctionThunkHelper(const FuncDecl *function,
+                                               GenericSignature signature,
+                                               CanType baseType,
+                                               SubstitutionMap subs,
+                                               ResilienceExpansion expansion);
 
   std::string mangleKeyPathGetterThunkHelper(const AbstractStorageDecl *property,
                                              GenericSignature signature,

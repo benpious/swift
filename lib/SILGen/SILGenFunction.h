@@ -1842,6 +1842,14 @@ public:
   //
 
   RValue emitApplyExpr(ApplyExpr *e, SGFContext c);
+    
+    RValue emitApplyKeypathFunction(SILLocation loc,
+                                    ManagedValue base,
+                                    FuncDecl *decl,
+                                    SGFContext c,
+                                    CanFunctionType baseType,
+                                    SubstitutionMap subs,
+                                    PreparedArguments &args);
 
   /// Emit a function application, assuming that the arguments have been
   /// lowered appropriately for the abstraction level but that the

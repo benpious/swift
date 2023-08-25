@@ -590,11 +590,13 @@ public:
                                       Optional<SILDeclRef> constant,
                                       SILType formalFnType) const & {
     CalleeTypeInfo result;
-
+//      auto &e = llvm::errs();
+//      e << "BEN: ";
+//      formalFnType.print(e);
+//      e << "\n";
     result.substFnType =
         formalFnType.castTo<SILFunctionType>()->substGenericArgs(
             SGF.SGM.M, Substitutions, SGF.getTypeExpansionContext());
-
     if (!constant || !constant->isForeign)
       return result;
 
@@ -4702,7 +4704,15 @@ public:
   /// A factory method for decomposing the apply expr \p e into a call
   /// emission.
   static CallEmission forApplyExpr(SILGenFunction &SGF, ApplyExpr *e);
-
+    
+    static CallEmission forApplyKeyPathFunction(SILLocation loc,
+                                                ManagedValue base,
+                                                SILGenFunction &SGF,
+                                                FuncDecl *function,
+                                                CanFunctionType canTy,
+                                                SubstitutionMap subs,
+                                                PreparedArguments &preparedArgs);
+    
   /// Add a level of function application by passing in its possibly
   /// unevaluated arguments and their formal type.
   void addCallSite(CallSite &&site) {
@@ -5259,6 +5269,37 @@ ApplyOptions CallEmission::emitArgumentsForNormalApply(
   }
 
   return options;
+}
+
+CallEmission CallEmission::forApplyKeyPathFunction(SILLocation loc,
+                                                   ManagedValue base,
+                                                   SILGenFunction &SGF,
+                                                   FuncDecl *function,
+                                                   CanFunctionType canTy,
+                                                   SubstitutionMap subs,
+                                                   PreparedArguments &preparedArgs) {
+    FormalEvaluationScope writebacks(SGF);
+    // TODO: what is a side effect and can we have them here?
+    auto constant = SILDeclRef(function,
+                               SILDeclRef::Kind::Func); // TODO: `asForeign`?
+    auto callee = Callee::forDirect(SGF,
+                                    constant,
+                                    subs,
+                                    loc);
+    CallEmission emission(SGF, std::move(callee), std::move(writebacks));
+    ParameterTypeFlags flags; // TODO: make this work with inout/other flags
+    auto selfParam = AnyFunctionType::Param(base.getType().getASTType(),
+                                            Identifier(),
+                                            flags);
+    emission.addSelfParam(loc,
+                          ArgumentSource(loc,
+                                         RValue(SGF,
+                                                loc,
+                                                canTy,
+                                                std::move(base))),
+                          selfParam);
+    emission.addCallSite(loc, std::move(preparedArgs));
+    return emission;
 }
 
 CallEmission CallEmission::forApplyExpr(SILGenFunction &SGF, ApplyExpr *e) {
@@ -5914,6 +5955,23 @@ ManagedValue SILGenFunction::emitInjectEnum(SILLocation loc,
         // The payload is initialized, now apply the tag.
         B.createInjectEnumAddr(loc, bufferAddr, element);
       });
+}
+
+RValue SILGenFunction::emitApplyKeypathFunction(SILLocation loc,
+                                                ManagedValue base,
+                                                FuncDecl *decl,
+                                                SGFContext c,
+                                                CanFunctionType baseType,
+                                                SubstitutionMap subs,
+                                                PreparedArguments &args) {
+  CallEmission emission = CallEmission::forApplyKeyPathFunction(loc,
+                                                                base,
+                                                                *this,
+                                                                decl,
+                                                                baseType,
+                                                                subs,
+                                                                args);
+  return emission.apply(c);
 }
 
 RValue SILGenFunction::emitApplyExpr(ApplyExpr *e, SGFContext c) {

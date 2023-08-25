@@ -287,6 +287,35 @@ std::string ASTMangler::mangleGlobalVariableFull(const VarDecl *decl) {
   return finalize();
 }
 
+std::string ASTMangler::mangleKeyPathFunctionThunkHelper(const FuncDecl *function,
+                                           GenericSignature signature,
+                                           CanType baseType,
+                                           SubstitutionMap subs,
+                                           ResilienceExpansion expansion) {
+    beginMangling();
+    appendEntity(function);
+    if (signature)
+      appendGenericSignature(signature);
+    appendType(baseType, signature);
+    for (auto sub : subs.getReplacementTypes()) {
+        sub = sub->mapTypeOutOfContext();
+        
+        // FIXME: This seems wrong. We used to just mangle opened archetypes as
+        // their interface type. Let's make that explicit now.
+        sub = sub.transformRec([](Type t) -> Optional<Type> {
+            if (auto *openedExistential = t->getAs<OpenedArchetypeType>())
+                return openedExistential->getInterfaceType();
+            return None;
+        });
+
+        appendType(sub->getCanonicalType(), signature);
+      }
+    appendOperator("TK");
+    if (expansion == ResilienceExpansion::Minimal)
+      appendOperator("q");
+    return finalize();
+  }
+
 std::string ASTMangler::mangleKeyPathGetterThunkHelper(
                                             const AbstractStorageDecl *property,
                                             GenericSignature signature,

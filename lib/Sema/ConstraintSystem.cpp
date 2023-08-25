@@ -6403,9 +6403,7 @@ ConstraintLocator *ConstraintSystem::getArgumentLocator(Expr *expr) {
 
   ConstraintLocator *loc = nullptr;
   if (auto *KP = dyn_cast<KeyPathExpr>(application)) {
-      printf("BEN: looking for component w/ subscript");
     auto idx = KP->findComponentWithSubscriptArg(expr);
-      printf("BEN: found component w/ subscript");
     if (!idx)
       return nullptr;
     loc = getConstraintLocator(KP, {LocatorPathElt::KeyPathComponent(*idx)});

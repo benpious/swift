@@ -2961,7 +2961,12 @@ static SILFunction *getOrCreateKeyPathFunction(SILGenModule &SGM,
                          ResilienceExpansion expansion,
                          ArrayRef<IndexTypePair> indexes,
                          CanType baseType,
-                         CanType propertyType) {
+                         CanType propertyType,
+                         CanType returnTy) {
+    auto &errs = llvm::errs();
+    errs << "Ben: return Ty: ";
+    returnTy.print(errs);
+    errs << "\n";
   auto genericSig =
       genericEnv ? genericEnv->getGenericSignature().getCanonicalSignature()
                  : nullptr;
@@ -2979,7 +2984,7 @@ static SILFunction *getOrCreateKeyPathFunction(SILGenModule &SGM,
         TypeExpansionContext::minimal(), opaque, baseType);
       // probably needs to be return type not function type
     loweredPropTy = SGM.Types.getLoweredRValueType(
-        TypeExpansionContext::minimal(), opaque, propertyType);
+        TypeExpansionContext::minimal(), opaque, returnTy);
     
     auto paramConvention = ParameterConvention::Indirect_In_Guaranteed;
 
@@ -3032,7 +3037,7 @@ static SILFunction *getOrCreateKeyPathFunction(SILGenModule &SGM,
 
   signature = subSGF.F.getLoweredFunctionTypeInContext(
     subSGF.F.getTypeExpansionContext());
-
+    
   auto entry = thunk->begin();
   auto resultArgTy =
       subSGF.silConv.getSILType(signature->getSingleResult(), signature,
@@ -4006,22 +4011,27 @@ SILGenModule::emitKeyPathComponentForFunctionDecl(SILLocation loc,
              indexEquals, indexHash);
     auto indexPatternsCopy = getASTContext().AllocateCopy(indexPatterns);
     printf("create function\n");
+    auto returnTy = cast<AnyFunctionType>(componentTy->mapTypeOutOfContext()->getCanonicalType())->getResult()->getCanonicalType();
     auto getter = getOrCreateKeyPathFunction(*this,
              decl, subs,
              needsGenericContext ? genericEnv : nullptr,
              expansion,
              indexTypes,
-             baseTy, componentTy);
+             baseTy, componentTy,
+             returnTy);
     printf("function created\n");
     auto id = KeyPathPatternComponent::ComputedPropertyId(getter);
-    return KeyPathPatternComponent::forComputedGettableProperty(id,
+    printf("made id\n");
+    auto result = KeyPathPatternComponent::forComputedGettableProperty(id,
                                                          getter,
                                                          indexPatternsCopy,
                                                          indexEquals,
                                                          indexHash,
                                                          externalDecl,
                                                          externalSubs,
-                                                         componentTy);
+                                                         returnTy);
+    printf("made component\n");
+    return result;
 }
 
 KeyPathPatternComponent
@@ -4280,7 +4290,9 @@ RValue RValueEmitter::visitKeyPathExpr(KeyPathExpr *E, SGFContext C) {
   auto baseTy = rootTy;
   SmallVector<SILValue, 4> operands;
 
+    auto &errs = llvm::errs();
   for (auto &component : E->getComponents()) {
+      errs << "an component";
     switch (auto kind = component.getKind()) {
     case KeyPathExpr::Component::Kind::Function: {
         auto decl = cast<FuncDecl>(component.getDeclRef().getDecl());
@@ -4296,7 +4308,11 @@ RValue RValueEmitter::visitKeyPathExpr(KeyPathExpr *E, SGFContext C) {
                                                 component.getSubscriptIndexHashableConformances(),
                                                 baseTy
                                                 ));
+        errs << "emitted";
         baseTy = loweredComponents.back().getComponentType();
+        errs << "basety set";
+        baseTy.print(errs);
+        break;
     }
     case KeyPathExpr::Component::Kind::Property:
     case KeyPathExpr::Component::Kind::Subscript: {
@@ -4388,12 +4404,12 @@ RValue RValueEmitter::visitKeyPathExpr(KeyPathExpr *E, SGFContext C) {
       break;
     }
   }
-  
+    errs << "finished making components";
   StringRef objcString;
   if (auto objcExpr = dyn_cast_or_null<StringLiteralExpr>
                                                 (E->getObjCStringLiteralExpr()))
     objcString = objcExpr->getValue();
-  
+    errs << "finished casting objc string";
   auto pattern = KeyPathPattern::get(SGF.SGM.M,
                                      needsGenericContext
                                        ? SGF.F.getLoweredFunctionType()

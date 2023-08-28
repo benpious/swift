@@ -2829,6 +2829,7 @@ KeyPathPattern::get(SILModule &M, CanGenericSignature signature,
                     CanType rootType, CanType valueType,
                     ArrayRef<KeyPathPatternComponent> components,
                     StringRef objcString) {
+    printf("started calling get\n");
   llvm::FoldingSetNodeID id;
   Profile(id, signature, rootType, valueType, components, objcString);
   
@@ -2855,11 +2856,12 @@ KeyPathPattern::get(SILModule &M, CanGenericSignature signature,
       }
     }
   }
-  
+    printf("creating pattern\n");
   auto newPattern = KeyPathPattern::create(M, signature, rootType, valueType,
                                            components, objcString,
                                            maxOperandNo + 1);
   M.KeyPathPatterns.InsertNode(newPattern, insertPos);
+    printf("finished calling get\n");
   return newPattern;
 }
 

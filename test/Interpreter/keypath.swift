@@ -4,7 +4,7 @@
 // UNSUPPORTED: use_os_stdlib
 // UNSUPPORTED: back_deployment_runtime
 
-struct Controller {
+class Controller {
     
     func test() {
         print("abc")

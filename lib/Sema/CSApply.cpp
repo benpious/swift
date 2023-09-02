@@ -2408,8 +2408,17 @@ namespace {
       }
 
       if (auto *UDE = dyn_cast<UnresolvedDotExpr>(anchor)) {
-        buildKeyPathPropertyComponent(overload, UDE->getLoc(), componentLoc,
-                                      components);
+          auto &err = llvm::errs();
+          UDE->getBase()->dump(err);
+          if (auto *cExpr = dyn_cast<CallExpr>(UDE->getBase())) {
+              err << "BEN: building a function call";
+              buildKeyPathFunctionComponent(overload, UDE->getLoc(),
+                                            cExpr->getArgs(), componentLoc, components);
+          } else {
+              err << "BEN: building a property component b/c this was a UDE";
+              buildKeyPathPropertyComponent(overload, UDE->getLoc(), componentLoc,
+                                            components);
+          }
       } else if (auto *SE = dyn_cast<SubscriptExpr>(anchor)) {
         buildKeyPathSubscriptComponent(overload, SE->getLoc(), SE->getArgs(),
                                        componentLoc, components);
@@ -3323,6 +3332,9 @@ namespace {
     Expr *applyMemberRefExpr(Expr *expr, Expr *base, SourceLoc dotLoc,
                              DeclNameLoc nameLoc, bool implicit) {
       // If we have a constructor member, handle it as a constructor.
+        auto &errs = llvm::errs();
+        errs << "BEN: apply member: ";
+        expr->dump(errs);
       auto ctorLocator = cs.getConstraintLocator(
                            expr,
                            ConstraintLocator::ConstructorMember);
@@ -3463,6 +3475,12 @@ namespace {
                                       SourceLoc nameLoc,
                                       const SelectedOverload &overload,
                                       ConstraintLocator *memberLocator) {
+        auto &errs = llvm::errs();
+        errs << "BEN: printing the expr we're gonna get a dynamic member from\n";
+        expr->dump(errs);
+        errs << "\n";
+        base->dump(errs);
+        errs << "\n";
       // Application of a DynamicMemberLookup result turns
       // a member access of `x.foo` into x[dynamicMember: "foo"], or
       // x[dynamicMember: KeyPath<T, U>]

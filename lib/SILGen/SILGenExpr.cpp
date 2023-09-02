@@ -3096,17 +3096,17 @@ static SILFunction *getOrCreateKeyPathFunction(SILGenModule &SGM,
 
     // TODO: this is always true b/c it's a function. Just comment it out for now,
     // there is zero chance that this goes wrong
-//    if (resultSubst.getType().getAddressType() != resultArgTy) {
-//        auto &err = llvm::errs();
-//        err << "BEN: ";
-//        resultSubst.getType().getAddressType().print(err);
-//        resultArgTy.print(err);
-//        err << "\n";
-//        err << "\n";
-//        resultSubst = subSGF.emitSubstToOrigValue(loc, resultSubst,
-//                                                  AbstractionPattern::getOpaque(),
-//                                                  propertyType);
-//    }
+    if (resultSubst.getType().getAddressType() != resultArgTy) {
+        auto &err = llvm::errs();
+        err << "BEN: ";
+        resultSubst.getType().getAddressType().print(err);
+        resultArgTy.print(err);
+        err << "\n";
+        err << "\n";
+        resultSubst = subSGF.emitSubstToOrigValue(loc, resultSubst,
+                                                  AbstractionPattern::getOpaque(),
+                                                  propertyType);
+    }
 
   if (SGM.M.useLoweredAddresses()) {
     resultSubst.forwardInto(subSGF, loc, resultArg);

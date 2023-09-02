@@ -5282,22 +5282,45 @@ CallEmission CallEmission::forApplyKeyPathFunction(SILLocation loc,
     // TODO: what is a side effect and can we have them here?
     auto constant = SILDeclRef(function,
                                SILDeclRef::Kind::Func); // TODO: `asForeign`?
-    auto callee = Callee::forDirect(SGF,
-                                    constant,
-                                    subs,
-                                    loc);
-    CallEmission emission(SGF, std::move(callee), std::move(writebacks));
     ParameterTypeFlags flags; // TODO: make this work with inout/other flags
     auto selfParam = AnyFunctionType::Param(base.getType().getASTType(),
                                             Identifier(),
                                             flags);
+    auto selfSource = ArgumentSource(loc,
+                                     RValue(SGF,
+                                            loc,
+                                            canTy,
+                                            std::move(base)));
+    Callee callee = [&] {
+        auto &err = llvm::errs();
+        // from getBaseAccessorFunctionRef
+        auto *decl = cast<AbstractFunctionDecl>(constant.getDecl());
+        if (isa<ProtocolDecl>(decl->getDeclContext())) {
+            err << "BEN: for witness\n";
+            return Callee::forWitnessMethod(SGF,
+                                            selfSource.getSubstRValueType(),
+                                            constant, subs, loc);
+        } else {
+            switch (getMethodDispatch(decl)) {
+                case MethodDispatch::Class:
+                    err << "BEN: for class\n";
+                    return Callee::forClassMethod(SGF,
+                                                  constant,
+                                                  subs,
+                                                  loc);
+                case MethodDispatch::Static:
+                    err << "BEN: for static\n";
+                    return Callee::forDirect(SGF,
+                                             constant,
+                                             subs,
+                                             loc);
+            }
+        }
+    }();
+    CallEmission emission(SGF, std::move(callee), std::move(writebacks));
     emission.addSelfParam(loc,
-                          ArgumentSource(loc,
-                                         RValue(SGF,
-                                                loc,
-                                                canTy,
-                                                std::move(base))),
-                          selfParam);
+                          std::move(selfSource),
+                          callee.getSubstFormalType().getParams()[0]); // sub for witness table, maybe
     emission.addCallSite(loc, std::move(preparedArgs));
     return emission;
 }

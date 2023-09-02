@@ -3332,9 +3332,6 @@ namespace {
     Expr *applyMemberRefExpr(Expr *expr, Expr *base, SourceLoc dotLoc,
                              DeclNameLoc nameLoc, bool implicit) {
       // If we have a constructor member, handle it as a constructor.
-        auto &errs = llvm::errs();
-        errs << "BEN: apply member: ";
-        expr->dump(errs);
       auto ctorLocator = cs.getConstraintLocator(
                            expr,
                            ConstraintLocator::ConstructorMember);

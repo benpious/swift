@@ -167,6 +167,8 @@ ManagedValue ArgumentSource::materialize(SILGenFunction &SGF,
     errs << "BEN: materializing\n";
     destType.getObjectType().print(errs);
     errs << "\n";
+    substFormalType.print(errs);
+    errs << "\n";
     errs << SGF.getLoweredType(origFormalType,
                                substFormalType).getObjectType();
     errs << "\n";

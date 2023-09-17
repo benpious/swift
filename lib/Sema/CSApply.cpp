@@ -2088,10 +2088,12 @@ namespace {
                          ConstraintLocatorBuilder locator,
                          ConstraintLocatorBuilder memberLocator,
                          bool isImplicit, AccessSemantics semantics,
-                         const SelectedOverload &selected) {
+                         const SelectedOverload &selected,
+                         bool isCallExpr) {
       // Build the new subscript.
       auto newSubscript = buildSubscriptHelper(base, args, selected,
-                                               locator, isImplicit, semantics);
+                                               locator, isImplicit, semantics,
+                                               isCallExpr);
       return forceUnwrapIfExpected(newSubscript, memberLocator,
                                    IUOReferenceKind::ReturnValue);
     }
@@ -2099,12 +2101,15 @@ namespace {
     Expr *buildSubscriptHelper(Expr *base, ArgumentList *args,
                                const SelectedOverload &selected,
                                ConstraintLocatorBuilder locator,
-                               bool isImplicit, AccessSemantics semantics) {
+                               bool isImplicit, AccessSemantics semantics,
+                               bool isCallExpr) {
+        auto &errs = llvm::errs();
       auto choice = selected.choice;
       auto &ctx = cs.getASTContext();
 
       // Apply a key path if we have one.
       if (choice.getKind() == OverloadChoiceKind::KeyPathApplication) {
+          errs << "BEN: we have a kp\n";
         auto applicationTy =
             simplifyType(selected.adjustedOpenedType)->castTo<FunctionType>();
 
@@ -2183,6 +2188,8 @@ namespace {
             base->isImplicit() && args->isImplicit());
         cs.setType(keyPathAp, valueTy);
         return keyPathAp;
+      } else {
+          errs << "we don't have a KP\n";
       }
       
       auto subscript = cast<SubscriptDecl>(choice.getDecl());
@@ -2215,12 +2222,41 @@ namespace {
                                   ->castTo<FunctionType>();
       auto fullSubscriptTy = openedFullFnType->getResult()
                                   ->castTo<FunctionType>();
+        errs << "BEN: full subscript ty\n";
+        fullSubscriptTy->dump(errs);
+        if (isCallExpr) {
+            auto resultTy = fullSubscriptTy->castTo<FunctionType>()->getResult()
+            ->castTo<FunctionType>();
+            auto newResultTy = FunctionType::get(fullSubscriptTy->getParams(),
+                                                 resultTy->getResult(),
+                                                 fullSubscriptTy->getExtInfo()
+                                                 );
+            errs << "BEN: new type:\n";
+            newResultTy->dump(errs);
+            fullSubscriptTy = newResultTy;
+        }
       auto &appliedWrappers =
           solution.appliedPropertyWrappers[memberLoc->getAnchor()];
-      args = coerceCallArguments(
-          args, fullSubscriptTy, subscriptRef, nullptr,
-          locator.withPathElement(ConstraintLocator::ApplyArgument),
-          appliedWrappers);
+      errs << "BEN: dumping args in buildSubscrhelper\n";
+//        for (auto arg : *args) {
+//            errs << "\n";
+//            arg.getExpr()->dump(errs);
+//            errs << "\n";
+//        }
+        errs << "BEN: done\n";
+        if (!isCallExpr) {
+            args = coerceCallArguments(
+                                       args, fullSubscriptTy, subscriptRef, nullptr,
+                                       locator.withPathElement(ConstraintLocator::ApplyArgument),
+                                       appliedWrappers);
+        }
+//        errs << "BEN: dumping args after coerce\n";
+//        for (auto arg : *args) {
+//            errs << "\n";
+//            arg.getExpr()->dump(errs);
+//            errs << "\n";
+//        }
+//        errs << "BEN: done\n";
       if (!args)
         return nullptr;
 
@@ -2298,7 +2334,7 @@ namespace {
               new (ctx) CovariantReturnConversionExpr(result, conversionTy));
         }
       }
-
+        errs << "finished\n";
       return result;
     }
 
@@ -2349,20 +2385,50 @@ namespace {
     /// \param memberLoc The locator to be associated with new argument.
     Expr *buildKeyPathDynamicMemberArgExpr(BoundGenericType *keyPathTy,
                                            SourceLoc dotLoc,
-                                           ConstraintLocator *memberLoc) {
+                                           ConstraintLocator *memberLoc,
+                                           CallExpr *callExpr) {
+        auto &err = llvm::errs();
       using Component = KeyPathExpr::Component;
       auto &ctx = cs.getASTContext();
-      auto *anchor = getAsExpr(memberLoc->getAnchor());
-
+        err << "BEN: getting as Expr\n";
+        auto *anchor = [&] {
+            if (callExpr) {
+                return (Expr *)callExpr;
+            } else {
+                return getAsExpr(memberLoc->getAnchor());
+            }
+        }();
+        err << "BEN: got as Expr\n";
       auto makeKeyPath = [&](ArrayRef<Component> components) -> Expr * {
+          err << "BEN: making for call expr\n";
         auto *kp = KeyPathExpr::createImplicit(ctx, /*backslashLoc*/ dotLoc,
                                                components, anchor->getEndLoc());
-        kp->setType(keyPathTy);
+          if (callExpr) {
+              // TODO: based on some code elsewhere a keypath should always
+              // have two args, and the one at index 1 should be the result type
+              err << "BEN: kp type\n";
+              keyPathTy->dump(err);
+              err << "BEN: kp type printed\n";
+              auto subscriptType =
+              simplifyType(keyPathTy->getGenericArgs()[1])
+              ->castTo<AnyFunctionType>();
+              std::vector<Type> vec;
+              vec.push_back(keyPathTy->getGenericArgs()[0]);
+              vec.push_back(keyPathTy->getGenericArgs()[1]);
+              auto ref = ArrayRef<Type>(&vec.front(), &vec.back());
+              auto newGenericType = BoundGenericClassType::get(keyPathTy->castTo<BoundGenericClassType>() ->getDecl(),
+                                                               keyPathTy->getParent(),
+                                                               ref);
+              kp->setType(newGenericType);
+          } else {
+              kp->setType(keyPathTy);
+          }
         cs.cacheExprTypes(kp);
 
         // See whether there's an equivalent ObjC key path string we can produce
         // for interop purposes.
         checkAndSetObjCKeyPathString(kp);
+          err << "BEN: made\n";
         return kp;
       };
 
@@ -2370,7 +2436,9 @@ namespace {
       auto *componentLoc = cs.getConstraintLocator(
           memberLoc,
           LocatorPathElt::KeyPathDynamicMember(keyPathTy->getAnyNominal()));
+        err << "BEN: got constraint loc\n";
       auto overload = solution.getOverloadChoice(componentLoc);
+        err << "BEN: got overload\n";
 
       // Looks like there is a chain of implicit `subscript(dynamicMember:)`
       // calls necessary to resolve a member reference.
@@ -2385,7 +2453,7 @@ namespace {
       default:
         break;
       }
-
+        err << "BEN: checking if inside\n";
       if (auto *KPE = dyn_cast<KeyPathExpr>(anchor)) {
         // Looks like keypath dynamic member lookup was used inside
         // of a keypath expression e.g. `\Lens<[Int]>.count` where
@@ -2406,16 +2474,18 @@ namespace {
         }
         return makeKeyPath(components);
       }
-
-      if (auto *UDE = dyn_cast<UnresolvedDotExpr>(anchor)) {
-          auto &err = llvm::errs();
+        if (callExpr) {
+            err << "BEN: making for call expr\n";
+            buildKeyPathFunctionComponent(overload, callExpr->getLoc(),
+                                          callExpr->getArgs(), componentLoc, components, true);
+        } else if (auto *UDE = dyn_cast<UnresolvedDotExpr>(anchor)) {
           UDE->getBase()->dump(err);
-          if (auto *cExpr = dyn_cast<CallExpr>(UDE->getBase())) {
-              err << "BEN: building a function call";
-              buildKeyPathFunctionComponent(overload, UDE->getLoc(),
-                                            cExpr->getArgs(), componentLoc, components);
+          if (UDE->getFunctionRefKind() == FunctionRefKind::SingleApply ||
+              UDE->getFunctionRefKind() == FunctionRefKind::DoubleApply) {
+              err << "BEN: returning null\n";
+              return nullptr;
           } else {
-              err << "BEN: building a property component b/c this was a UDE";
+              err << "BEN: building for property\n";
               buildKeyPathPropertyComponent(overload, UDE->getLoc(), componentLoc,
                                             components);
           }
@@ -3449,7 +3519,7 @@ namespace {
       case OverloadChoiceKind::DynamicMemberLookup:
       case OverloadChoiceKind::KeyPathDynamicMemberLookup: {
         return buildDynamicMemberLookupRef(
-            expr, base, dotLoc, nameLoc.getStartLoc(), selected, memberLocator);
+            expr, base, dotLoc, nameLoc.getStartLoc(), selected, memberLocator, nullptr);
       }
       }
 
@@ -3471,7 +3541,8 @@ namespace {
     Expr *buildDynamicMemberLookupRef(Expr *expr, Expr *base, SourceLoc dotLoc,
                                       SourceLoc nameLoc,
                                       const SelectedOverload &overload,
-                                      ConstraintLocator *memberLocator) {
+                                      ConstraintLocator *memberLocator,
+                                      CallExpr *callExpr) {
         auto &errs = llvm::errs();
         errs << "BEN: printing the expr we're gonna get a dynamic member from\n";
         expr->dump(errs);
@@ -3486,18 +3557,21 @@ namespace {
       // Figure out the expected type of the lookup parameter. We know the
       // openedFullType will be "xType -> indexType -> resultType".  Dig out
       // its index type.
+        errs << "BEN: paramTy \n";
       auto paramTy = getTypeOfDynamicMemberIndex(overload);
+        errs << "BEN: paramTy done \n";
 
       Expr *argExpr = nullptr;
       if (overload.choice.getKind() ==
-          OverloadChoiceKind::DynamicMemberLookup) {
+          OverloadChoiceKind::DynamicMemberLookup && !callExpr) {
         // Build and type check the string literal index value to the specific
         // string type expected by the subscript.
+          errs << "BEN: buildDynamicMemberLookupArgExpr \n";
         auto fieldName = overload.choice.getName().getBaseIdentifier().str();
         argExpr = buildDynamicMemberLookupArgExpr(fieldName, nameLoc, paramTy);
       } else {
         argExpr = buildKeyPathDynamicMemberArgExpr(
-            paramTy->castTo<BoundGenericType>(), dotLoc, memberLocator);
+            paramTy->castTo<BoundGenericType>(), dotLoc, memberLocator, callExpr);
       }
 
       if (!argExpr)
@@ -3509,7 +3583,7 @@ namespace {
       // Build and return a subscript that uses this string as the index.
       return buildSubscript(base, argList, cs.getConstraintLocator(expr),
                             memberLocator, /*isImplicit*/ true,
-                            AccessSemantics::Ordinary, overload);
+                            AccessSemantics::Ordinary, overload, callExpr != nullptr);
     }
 
     Type getTypeOfDynamicMemberIndex(const SelectedOverload &overload) {
@@ -3524,9 +3598,40 @@ namespace {
     }
 
   public:
+      
+      Expr *visitCallExpr(CallExpr *expr) {
+          auto &errs = llvm::errs();
+//          errs << "BEN: visiting call expr";
+//          expr->dump(errs);
+          auto ude = dyn_cast<UnresolvedDotExpr>(expr->getFn());
+          if (ude) {
+              auto memberLocator = cs.getConstraintLocator(ude,
+                                                           ConstraintLocator::Member);
+              auto callLocator = cs.getConstraintLocator(expr,
+                                                         ConstraintLocator::Member);
+              auto selectedElt = solution.getOverloadChoiceIfAvailable(memberLocator);
+              auto callOverload = solution.getOverloadChoiceIfAvailable(callLocator);
+              if (selectedElt.has_value()) {
+                  errs << "BEN: has value";
+                  auto selected = selectedElt.value();
+                  if (selected.choice.getKind() == OverloadChoiceKind::KeyPathDynamicMemberLookup) {
+                      errs << "BEN: is the right kind of lookup";
+                      return buildDynamicMemberLookupRef(expr, ude->getBase(),
+                                                         ude->getDotLoc(), ude->getDotLoc(), selected, memberLocator,
+                                                         expr);
+                  }
+              }
+          }
+          return ExprVisitor<ExprRewriter, Expr *>::visitCallExpr(expr);
+      }
+      
     Expr *visitUnresolvedDotExpr(UnresolvedDotExpr *expr) {
-      return applyMemberRefExpr(expr, expr->getBase(), expr->getDotLoc(),
+      auto result = applyMemberRefExpr(expr, expr->getBase(), expr->getDotLoc(),
                                 expr->getNameLoc(), expr->isImplicit());
+        if (result) {
+            return result;
+        }
+        return expr;
     }
 
     Expr *visitSequenceExpr(SequenceExpr *expr) {
@@ -3698,13 +3803,13 @@ namespace {
       if (overload->choice.isKeyPathDynamicMemberLookup()) {
         return buildDynamicMemberLookupRef(
             expr, expr->getBase(), expr->getArgs()->getStartLoc(), SourceLoc(),
-            *overload, memberLocator);
+            *overload, memberLocator, nullptr);
       }
 
       return buildSubscript(expr->getBase(), expr->getArgs(),
                             cs.getConstraintLocator(expr), memberLocator,
                             expr->isImplicit(), expr->getAccessSemantics(),
-                            *overload);
+                            *overload, false);
     }
 
     /// "Finish" an array expression by filling in the semantic expression.
@@ -3809,7 +3914,7 @@ namespace {
       return buildSubscript(expr->getBase(), expr->getArgs(),
                             cs.getConstraintLocator(expr), memberLocator,
                             expr->isImplicit(), AccessSemantics::Ordinary,
-                            solution.getOverloadChoice(memberLocator));
+                            solution.getOverloadChoice(memberLocator), false);
     }
 
     Expr *visitTupleElementExpr(TupleElementExpr *expr) {
@@ -5111,7 +5216,7 @@ namespace {
             buildKeyPathFunctionComponent(solution.getOverloadChoice(calleeLoc),
                                           origComponent.getLoc(),
                                           origComponent.getSubscriptArgs(),
-                                          componentLocator, resolvedComponents);
+                                          componentLocator, resolvedComponents, false);
             break;
           }
         case KeyPathExpr::Component::Kind::OptionalChain: {
@@ -5357,45 +5462,32 @@ namespace {
     void buildKeyPathFunctionComponent(
         const SelectedOverload &overload, SourceLoc componentLoc,
         ArgumentList *args, ConstraintLocator *locator,
-        SmallVectorImpl<KeyPathExpr::Component> &components) {
+        SmallVectorImpl<KeyPathExpr::Component> &components,
+                                       bool isDynamicMemberLookup) {
+        auto &err = llvm::errs();
       auto &ctx = cs.getASTContext();
+        err << "BEN: casting\n";
       auto subscript = cast<FuncDecl>(overload.choice.getDecl());
+        err << "BEN: got past the cast to func\n";
       auto memberLoc = cs.getCalleeLocator(locator);
-
+        if (args == nullptr) { // TODO: don't think i need this anymore
+            args = ArgumentList::forImplicitUnlabeled(ctx,
+                                                ArrayRef<Expr *>());
+        }
       // Compute substitutions to refer to the member.
       auto ref = resolveConcreteDeclRef(subscript, memberLoc);
-      
-      // If this is a @dynamicMemberLookup reference to resolve a property
-      // through the subscript(dynamicMember:) member, restore the
-      // openedType and origComponent to its full reference as if the user
-      // wrote out the subscript manually.
-      if (overload.choice.isAnyDynamicMemberLookup()) {
-        auto indexType = getTypeOfDynamicMemberIndex(overload);
-        Expr *argExpr = nullptr;
-        if (overload.choice.isKeyPathDynamicMemberLookup()) {
-          argExpr = buildKeyPathDynamicMemberArgExpr(
-              indexType->castTo<BoundGenericType>(), componentLoc, memberLoc);
-        } else {
-          auto fieldName = overload.choice.getName().getBaseIdentifier().str();
-          argExpr = buildDynamicMemberLookupArgExpr(fieldName, componentLoc,
-                                                    indexType);
-        }
-        args = ArgumentList::forImplicitSingle(ctx, ctx.Id_dynamicMember,
-                                               argExpr);
-        // Record the implicit subscript expr's parameter bindings and matching
-        // direction as `coerceCallArguments` requires them.
-        solution.recordSingleArgMatchingChoice(locator);
-      }
-
       auto subscriptType =
           simplifyType(overload.adjustedOpenedType)->castTo<AnyFunctionType>();
+        err << "resolved Ty \n";
       auto resolvedTy = subscriptType->getResult();
-
+        resolvedTy.dump(err);
       // Coerce the indices to the type the subscript expects.
+        err << "BEN: prepare to coerce\n";
       args = coerceCallArguments(
           args, subscriptType, ref, /*applyExpr*/ nullptr,
           cs.getConstraintLocator(locator, ConstraintLocator::ApplyArgument),
           /*appliedPropertyWrappers*/ {});
+        err << "BEN: coerced\n";
 
       // We need to be able to hash the captured index values in order for
       // KeyPath itself to be hashable, so check that all of the subscript
@@ -5452,7 +5544,7 @@ namespace {
         Expr *argExpr = nullptr;
         if (overload.choice.isKeyPathDynamicMemberLookup()) {
           argExpr = buildKeyPathDynamicMemberArgExpr(
-              indexType->castTo<BoundGenericType>(), componentLoc, memberLoc);
+              indexType->castTo<BoundGenericType>(), componentLoc, memberLoc, nullptr);
         } else {
           auto fieldName = overload.choice.getName().getBaseIdentifier().str();
           argExpr = buildDynamicMemberLookupArgExpr(fieldName, componentLoc,

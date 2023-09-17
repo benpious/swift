@@ -5,27 +5,36 @@
 // UNSUPPORTED: back_deployment_runtime
 
 struct S {
+    
     func abc() {
-        print("f")
+        
     }
+    
+    var a: Int = 8
 }
 
 @dynamicMemberLookup
 class Controller {
         
     subscript<T>(dynamicMember member: KeyPath<S, T>) -> T {
-        S()[keyPath: member]
+//        S()[keyPath: member]
+        fatalError()
     }
     
     func f() {
         
     }
+    
+    subscript(i: Int) -> () {
+        ()
+    }
             
 }
 
-
 let c = Controller()
+//c[8]
 //c.f()
 // CHECK: f
 c.abc()
+//_ = c.a
 //Controller().abc()

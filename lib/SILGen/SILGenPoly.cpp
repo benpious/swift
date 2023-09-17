@@ -366,6 +366,7 @@ ManagedValue Transform::transform(ManagedValue v,
                                   CanType outputSubstType,
                                   SILType loweredResultTy,
                                   SGFContext ctxt) {
+  auto &errs = llvm::errs();
   // Load if the result isn't address-only.  All the translation routines
   // expect this.
   if (v.getType().isAddress()) {
@@ -446,10 +447,12 @@ ManagedValue Transform::transform(ManagedValue v,
   }
   
   // Abstraction changes:
-
+  errs << "BEN: transform casts begin\n";
   //  - functions
   if (auto outputFnType = dyn_cast<AnyFunctionType>(outputSubstType)) {
+    errs << "BEN: function\n";
     auto inputFnType = cast<AnyFunctionType>(inputSubstType);
+    errs << "BEN: function\n";
     return transformFunction(v,
                              inputOrigType, inputFnType,
                              outputOrigType, outputFnType,
@@ -458,7 +461,9 @@ ManagedValue Transform::transform(ManagedValue v,
 
   //  - tuples of transformable values
   if (auto outputTupleType = dyn_cast<TupleType>(outputSubstType)) {
+    errs << "BEN: tuple\n";
     auto inputTupleType = cast<TupleType>(inputSubstType);
+    errs << "BEN: tuple\n";
     return transformTuple(v,
                           inputOrigType, inputTupleType,
                           outputOrigType, outputTupleType,
@@ -476,7 +481,7 @@ ManagedValue Transform::transform(ManagedValue v,
   }
 
   // Subtype conversions:
-
+  errs << "BEN: subtype conv\n";
   // A base class method returning Self can be used in place of a derived
   // class method returning Self.
   if (auto inputSelfType = dyn_cast<DynamicSelfType>(inputSubstType)) {
@@ -532,7 +537,7 @@ ManagedValue Transform::transform(ManagedValue v,
                 .getScalarValue();
     }
   }
-
+  errs << "BEN: archtype test\n";
   //  - upcasts from an archetype
   if (outputSubstType->getClassOrBoundGenericClass()) {
     if (auto archetypeType = dyn_cast<ArchetypeType>(inputSubstType)) {
@@ -613,7 +618,7 @@ ManagedValue Transform::transform(ManagedValue v,
                        ctxt);
     }
   }
-
+  errs << "BEN: anyhashable test\n";
   // - T : Hashable to AnyHashable
   if (outputSubstType->isAnyHashable()) {
     auto *protocol = SGF.getASTContext().getProtocol(
@@ -4406,12 +4411,17 @@ ManagedValue Transform::transformFunction(ManagedValue fn,
                                           AbstractionPattern outputOrigType,
                                           CanAnyFunctionType outputSubstType,
                                           const TypeLowering &expectedTL) {
+  auto &errs = llvm::errs();
   assert(fn.getType().isObject() &&
          "expected input to emitTransformedFunctionValue to be loaded");
 
+  errs << "BEN: cast begun\n";
   auto expectedFnType = expectedTL.getLoweredType().castTo<SILFunctionType>();
-
+  errs << "BEN: cast done\n";
+  fn.dump(errs);
+  errs << "\n";
   auto fnType = fn.getType().castTo<SILFunctionType>();
+  errs << "BEN: second cast done\n";
   assert(expectedFnType->getExtInfo().hasContext()
          || !fnType->getExtInfo().hasContext());
 
@@ -4444,6 +4454,7 @@ ManagedValue Transform::transformFunction(ManagedValue fn,
   auto newFnType =
       adjustFunctionType(expectedFnType, newEI, fnType->getCalleeConvention(),
                          fnType->getWitnessMethodConformanceOrInvalid());
+  errs << "BEN: conversion done\n";
 
   // Apply any ABI-compatible conversions before doing thin-to-thick or
   // escaping->noescape conversion.
@@ -4455,6 +4466,7 @@ ManagedValue Transform::transformFunction(ManagedValue fn,
   // Now do thin-to-thick if necessary.
   if (newFnType != expectedFnType &&
       fnType->getRepresentation() == SILFunctionTypeRepresentation::Thin) {
+    errs << "BEN: thick\n";
     assert(expectedEI.getRepresentation() ==
            SILFunctionTypeRepresentation::Thick &&
            "all other conversions should have been handled by "
@@ -4463,11 +4475,12 @@ ManagedValue Transform::transformFunction(ManagedValue fn,
     fn = SGF.emitManagedRValueWithCleanup(
         SGF.B.createThinToThickFunction(Loc, fn.forward(SGF), resTy));
   } else if (newFnType != expectedFnType) {
+    errs << "BEN: not thick\n";
     // Escaping to noescape conversion.
     SILType resTy = SILType::getPrimitiveObjectType(expectedFnType);
     fn = SGF.B.createConvertEscapeToNoEscape(Loc, fn, resTy);
   }
-
+  errs << "BEN: done with transform func\n";
   return fn;
 }
 

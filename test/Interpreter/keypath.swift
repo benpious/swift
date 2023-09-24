@@ -4,21 +4,28 @@
 // UNSUPPORTED: use_os_stdlib
 // UNSUPPORTED: back_deployment_runtime
 
-struct S {
+class S {
     
     func abc() {
-        
+        print("f")
     }
     
     var a: Int = 8
+}
+
+class TT: S {
+  
+  override func abc() {
+    print("g")
+  }
+  
 }
 
 @dynamicMemberLookup
 class Controller {
         
     subscript<T>(dynamicMember member: KeyPath<S, T>) -> T {
-//        S()[keyPath: member]
-        fatalError()
+        TT()[keyPath: member]
     }
     
     func f() {
@@ -34,7 +41,7 @@ class Controller {
 let c = Controller()
 //c[8]
 //c.f()
-// CHECK: f
+// CHECK: g
 c.abc()
 //_ = c.a
 //Controller().abc()

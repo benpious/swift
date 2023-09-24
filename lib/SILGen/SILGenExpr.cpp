@@ -3077,31 +3077,34 @@ static SILFunction *getOrCreateKeyPathFunction(SILGenModule &SGM,
   ManagedValue resultSubst;
   {
     RValue resultRValue;
-      // TODO: handle optional objc protocol requirements.
-      // TODO: we maybe need to put the generics in, if available
-      // TODO: this is almost certainly wrong
-      SmallVector<AnyFunctionType::Param, 8> params;
-      for (AnyFunctionType::Param param : subscriptIndices.getParams()) {
-          params.push_back(param);
-      }
-      ArrayRef<AnyFunctionType::Param> ref(params.begin(), params.end());
-      auto canTy = CanFunctionType::get(ArrayRefView<AnyFunctionType::Param, AnyFunctionType::CanParam, AnyFunctionType::CanParam::getFromParam, true>(params),
-                                        resultArgTy.getASTType())
-      .withExtInfo(ASTExtInfo()); // TODO: this probably doesn't always work
-      auto baseSubstValue = emitKeyPathRValueBase(subSGF, function,
-                                                   loc, baseArg,
-                                                   baseType, subs);
-      errs << "BEN: resultRvalue\n";
-      resultRValue = subSGF.emitApplyKeypathFunction(loc,
-                                                     baseSubstValue,
-                                                     function,
-                                                     SGFContext(),
-                                                     CanFunctionType(canTy),
-                                                     subs,
-                                                     subscriptIndices);
-      errs << "BEN: done with resultRvalue\n";
+    // TODO: handle optional objc protocol requirements.
+    // TODO: we maybe need to put the generics in, if available
+    // TODO: this is almost certainly wrong
+    SmallVector<AnyFunctionType::Param, 8> params;
+    for (AnyFunctionType::Param param : subscriptIndices.getParams()) {
+      params.push_back(param);
+    }
+    ArrayRef<AnyFunctionType::Param> ref(params.begin(), params.end());
+    auto canTy = CanFunctionType::get(ArrayRefView<AnyFunctionType::Param, AnyFunctionType::CanParam, AnyFunctionType::CanParam::getFromParam, true>(params),
+                                      resultArgTy.getASTType())
+    .withExtInfo(ASTExtInfo()); // TODO: this probably doesn't always work
+    errs << "BEN: subs canTy\n";
+    canTy.dump(errs);
+    errs << "BEN: done with subs canTy";
+    auto baseSubstValue = emitKeyPathRValueBase(subSGF, function,
+                                                loc, baseArg,
+                                                baseType, subs);
+    errs << "BEN: resultRvalue\n";
+    resultRValue = subSGF.emitApplyKeypathFunction(loc,
+                                                   baseSubstValue,
+                                                   function,
+                                                   SGFContext(),
+                                                   CanFunctionType(canTy),
+                                                   subs,
+                                                   subscriptIndices);
+    errs << "BEN: done with resultRvalue\n";
     resultSubst = std::move(resultRValue).getAsSingleValue(subSGF, loc);
-      errs << "BEN: done with getAsSingle\n";
+    errs << "BEN: done with getAsSingle\n";
   }
 
     if (resultSubst.getType().getAddressType() != resultArgTy) {

@@ -2103,7 +2103,7 @@ namespace {
                                ConstraintLocatorBuilder locator,
                                bool isImplicit, AccessSemantics semantics,
                                bool isCallExpr) {
-        auto &errs = llvm::errs();
+      auto &errs = llvm::errs();
       auto choice = selected.choice;
       auto &ctx = cs.getASTContext();
 
@@ -2216,6 +2216,19 @@ namespace {
 
       // Compute the concrete reference to the subscript.
       auto subscriptRef = resolveConcreteDeclRef(subscript, memberLoc);
+      if (isCallExpr) {
+        // fish the result type out and make a new substitution map
+        auto oldMap = subscriptRef.getSubstitutions();
+        auto newReplacement = oldMap.getReplacementTypes()[0]
+          ->castTo<FunctionType>()
+          ->getResult();
+        std::array<Type, 1> newReplacements = {newReplacement};
+        auto subsMap = SubstitutionMap::get(oldMap.getGenericSignature(),
+                                            newReplacements,
+                                            oldMap.getConformances());
+        subscriptRef = ConcreteDeclRef(subscriptRef.getDecl(),
+                                       subsMap);
+      }
 
       // Coerce the index argument.
       auto openedFullFnType = simplifyType(selected.adjustedOpenedFullType)
@@ -2227,36 +2240,33 @@ namespace {
         if (isCallExpr) {
             auto resultTy = fullSubscriptTy->castTo<FunctionType>()->getResult()
             ->castTo<FunctionType>();
-            auto newResultTy = FunctionType::get(fullSubscriptTy->getParams(),
-                                                 resultTy->getResult(),
-                                                 fullSubscriptTy->getExtInfo()
-                                                 );
-            errs << "BEN: new type:\n";
-            newResultTy->dump(errs);
-            fullSubscriptTy = newResultTy;
+//          assert(fullSubscriptTy->getParams().Length == 1 && "Should have only one parameter: the keypath");
+          auto kpParam = fullSubscriptTy->getParams()[0];
+          auto kpExpr = args->getExpr(0);
+          auto kpParamTy = cs.getType(kpExpr);
+          auto newKpParam = FunctionType::Param(kpParamTy,
+                                                kpParam.getLabel(),
+                                                kpParam.getParameterFlags(),
+                                                kpParam.getInternalLabel());
+          std::array<FunctionType::Param, 1> newParamsArray = {newKpParam};
+          auto newParams = ArrayRef<FunctionType::Param>(newParamsArray);
+          auto newResultTy = FunctionType::get(newParams,
+                                               resultTy->getResult(),
+                                               fullSubscriptTy->getExtInfo()
+                                               );
+          errs << "BEN: new type:\n";
+          newResultTy->dump(errs);
+          fullSubscriptTy = newResultTy;
         }
       auto &appliedWrappers =
           solution.appliedPropertyWrappers[memberLoc->getAnchor()];
-      errs << "BEN: dumping args in buildSubscrhelper\n";
-//        for (auto arg : *args) {
-//            errs << "\n";
-//            arg.getExpr()->dump(errs);
-//            errs << "\n";
-//        }
-        errs << "BEN: done\n";
         if (!isCallExpr) {
+          // In the callExpr case, we effectively do this manually.
             args = coerceCallArguments(
                                        args, fullSubscriptTy, subscriptRef, nullptr,
                                        locator.withPathElement(ConstraintLocator::ApplyArgument),
                                        appliedWrappers);
         }
-//        errs << "BEN: dumping args after coerce\n";
-//        for (auto arg : *args) {
-//            errs << "\n";
-//            arg.getExpr()->dump(errs);
-//            errs << "\n";
-//        }
-//        errs << "BEN: done\n";
       if (!args)
         return nullptr;
 
@@ -2312,6 +2322,9 @@ namespace {
           ctx, base, args, subscriptRef, isImplicit, semantics);
       cs.setType(subscriptExpr, fullSubscriptTy->getResult());
       subscriptExpr->setIsSuper(isSuper);
+      errs << "BEN: full subscript ty result\n";
+      fullSubscriptTy->getResult()->dump(errs);
+      errs << "\n";
       cs.setType(subscriptExpr,
                  hasDynamicSelf
                      ? fullSubscriptTy->getResult()->replaceCovariantResultType(
@@ -2334,7 +2347,9 @@ namespace {
               new (ctx) CovariantReturnConversionExpr(result, conversionTy));
         }
       }
-        errs << "finished\n";
+      errs << "BEN: printing result\n";
+      result->dump(errs);
+      errs << "finished\n";
       return result;
     }
 
@@ -2404,22 +2419,35 @@ namespace {
         auto *kp = KeyPathExpr::createImplicit(ctx, /*backslashLoc*/ dotLoc,
                                                components, anchor->getEndLoc());
           if (callExpr) {
-              // TODO: based on some code elsewhere a keypath should always
-              // have two args, and the one at index 1 should be the result type
-              err << "BEN: kp type\n";
-              keyPathTy->dump(err);
-              err << "BEN: kp type printed\n";
-              auto subscriptType =
-              simplifyType(keyPathTy->getGenericArgs()[1])
-              ->castTo<AnyFunctionType>();
-              std::vector<Type> vec;
-              vec.push_back(keyPathTy->getGenericArgs()[0]);
-              vec.push_back(keyPathTy->getGenericArgs()[1]);
-              auto ref = ArrayRef<Type>(&vec.front(), &vec.back());
-              auto newGenericType = BoundGenericClassType::get(keyPathTy->castTo<BoundGenericClassType>() ->getDecl(),
-                                                               keyPathTy->getParent(),
-                                                               ref);
-              kp->setType(newGenericType);
+            err << "BEN: kp type\n";
+            keyPathTy->dump(err);
+            err << "BEN: kp type printed\n";
+            auto subscriptType =
+            simplifyType(keyPathTy->getGenericArgs()[1])
+            ->castTo<AnyFunctionType>()->getResult();
+            std::array<Type, 2> vec;
+            vec[0] = keyPathTy->getGenericArgs()[0];
+            vec[1] = subscriptType;
+            auto ref = ArrayRef<Type>(vec);
+            err << "BEN: bgt decl\n";
+            keyPathTy->castTo<BoundGenericClassType>()->getDecl()->dump(err);
+            err << "\n\n";
+            auto newGenericType = BoundGenericClassType::get(keyPathTy->castTo<BoundGenericClassType>()->getDecl(),
+                                                             keyPathTy->getParent(),
+                                                             ref);
+            err << "printing generic args of old thing\n";
+            for (auto i : keyPathTy->getGenericArgs()) {
+              i.dump(err);
+            }
+            err << "finished printing generic args of old thing\n";
+            err << "printing generic args of new thing\n";
+            for (auto i : newGenericType->getGenericArgs()) {
+              i.dump(err);
+            }
+            err << "finished printing generic args of new thing\n";
+            
+            kp->setType(newGenericType);
+            keyPathTy = newGenericType;
           } else {
               kp->setType(keyPathTy);
           }
@@ -3557,21 +3585,23 @@ namespace {
       // Figure out the expected type of the lookup parameter. We know the
       // openedFullType will be "xType -> indexType -> resultType".  Dig out
       // its index type.
-        errs << "BEN: paramTy \n";
       auto paramTy = getTypeOfDynamicMemberIndex(overload);
-        errs << "BEN: paramTy done \n";
 
       Expr *argExpr = nullptr;
       if (overload.choice.getKind() ==
           OverloadChoiceKind::DynamicMemberLookup && !callExpr) {
         // Build and type check the string literal index value to the specific
         // string type expected by the subscript.
-          errs << "BEN: buildDynamicMemberLookupArgExpr \n";
         auto fieldName = overload.choice.getName().getBaseIdentifier().str();
         argExpr = buildDynamicMemberLookupArgExpr(fieldName, nameLoc, paramTy);
       } else {
         argExpr = buildKeyPathDynamicMemberArgExpr(
             paramTy->castTo<BoundGenericType>(), dotLoc, memberLocator, callExpr);
+        if (argExpr) {
+          errs << "BEN: dumping arg expr\n";
+          argExpr->dump(errs);
+          errs << "BEN: finished dumping arg expr\n";
+        }
       }
 
       if (!argExpr)
@@ -3580,7 +3610,7 @@ namespace {
       // Build an argument list.
       auto *argList =
           ArgumentList::forImplicitSingle(ctx, ctx.Id_dynamicMember, argExpr);
-      // Build and return a subscript that uses this string as the index.
+      // Build and return a subscript that uses this string or keypath as the index.
       return buildSubscript(base, argList, cs.getConstraintLocator(expr),
                             memberLocator, /*isImplicit*/ true,
                             AccessSemantics::Ordinary, overload, callExpr != nullptr);

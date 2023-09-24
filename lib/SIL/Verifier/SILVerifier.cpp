@@ -1120,6 +1120,8 @@ public:
   }
 
   void visitSILArgument(SILArgument *arg) {
+//    auto &errs = llvm::errs();
+//    errs << "BEN: visit SIL arg\n";
     CurArgument = arg;
     checkLegalType(arg->getFunction(), arg, nullptr);
 
@@ -1127,14 +1129,16 @@ public:
     require(!arg->getFunction()->hasOwnership() ||
                 computeIsReborrow(arg) == arg->isReborrow(),
             "Stale reborrow flag");
-
+//    errs << "BEN: passed require\n";
     if (checkLinearLifetime) {
+//      errs << "BEN: checking linear lifetime\n";
       checkValueBaseOwnership(arg);
     }
     if (auto *phiArg = dyn_cast<SILPhiArgument>(arg)) {
-      if (phiArg->isPhi())
+      if (phiArg->isPhi()) {
+//        errs << "BEN: visit SIL phi arg\n";
         visitSILPhiArgument(phiArg);
-      else {
+      } else {
         // A non-phi BlockArgument must have a single predecessor unless it is
         // unreachable.
         require(arg->getParent()->pred_empty()
@@ -5368,8 +5372,11 @@ public:
   }
   
   void checkKeyPathInst(KeyPathInst *KPI) {
+    auto &errs = llvm::errs();
     auto kpTy = KPI->getType();
-    
+    errs << "BEN: kpTy";
+    kpTy.dump();
+    errs << "\n\n";
     require(kpTy.isObject(), "keypath result must be an object type");
     
     auto kpBGT = kpTy.getAs<BoundGenericType>();
@@ -5378,8 +5385,10 @@ public:
             kpBGT->isWritableKeyPath() ||
             kpBGT->isReferenceWritableKeyPath(),
             "keypath result must be a key path type");
-    
+    errs << "BEN: indexing\n";
+    kpBGT.dump(errs);
     auto baseTy = CanType(kpBGT->getGenericArgs()[0]);
+    errs << "BEN: done indexing\n";
     auto pattern = KPI->getPattern();
     SubstitutionMap patternSubs = KPI->getSubstitutions();
     requireSameType(
@@ -5388,7 +5397,13 @@ public:
             pattern->getRootType().subst(patternSubs)->getCanonicalType()).getASTType(),
         "keypath root type should match root type of keypath pattern");
 
+    errs << "BEN: indexing 1\n";
+    for (auto t : kpBGT->getGenericArgs()) {
+      t.dump(errs);
+      errs << "\n";
+    }
     auto leafTy = CanType(kpBGT->getGenericArgs()[1]);
+    errs << "BEN: done indexing\n";
     requireSameType(
         F.getLoweredType(leafTy).getASTType(),
         F.getLoweredType(
@@ -5430,6 +5445,7 @@ public:
         F.getLoweredType(CanType(baseTy)).getASTType(),
         F.getLoweredType(CanType(leafTy)).getASTType(),
         "final component should match leaf value type of key path type");
+    errs << "BEN: done with checkKeyPathInst\n";
   }
 
   void checkIsEscapingClosureInst(IsEscapingClosureInst *IEC) {
@@ -6559,15 +6575,23 @@ public:
   }
 
   void visitSILBasicBlock(SILBasicBlock *BB) {
+//    auto &errs = llvm::errs();
+//    errs << "BEN: visit SIL basic block\n";
     SILInstructionVisitor::visitSILBasicBlock(BB);
     verifyDebugScopeHoles(BB);
+//    errs << "finished visit sil basic block\n";
   }
 
   void visitBasicBlockArguments(SILBasicBlock *BB) {
     CurInstruction = nullptr;
+    auto &errs = llvm::errs();
+//    errs << "BEN: visit SIL basic block args\n";
     for (auto argI = BB->args_begin(), argEnd = BB->args_end(); argI != argEnd;
-         ++argI)
+         ++argI) {
+//      errs << "BEN: visit SIL basic block argument\n";
       visitSILArgument(*argI);
+    }
+//    errs << "BEN: finished visiting SIL basic blocks\n";
   }
 
   void visitSILBasicBlocks(SILFunction *F) {

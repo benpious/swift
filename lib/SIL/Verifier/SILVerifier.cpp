@@ -5367,7 +5367,6 @@ public:
   }
   
   void checkKeyPathInst(KeyPathInst *KPI) {
-    auto &errs = llvm::errs();
     auto kpTy = KPI->getType();
     require(kpTy.isObject(), "keypath result must be an object type");
     
@@ -5377,7 +5376,6 @@ public:
             kpBGT->isWritableKeyPath() ||
             kpBGT->isReferenceWritableKeyPath(),
             "keypath result must be a key path type");
-    kpBGT.dump(errs);
     auto baseTy = CanType(kpBGT->getGenericArgs()[0]);
     auto pattern = KPI->getPattern();
     SubstitutionMap patternSubs = KPI->getSubstitutions();
@@ -5387,10 +5385,6 @@ public:
             pattern->getRootType().subst(patternSubs)->getCanonicalType()).getASTType(),
         "keypath root type should match root type of keypath pattern");
 
-    for (auto t : kpBGT->getGenericArgs()) {
-      t.dump(errs);
-      errs << "\n";
-    }
     auto leafTy = CanType(kpBGT->getGenericArgs()[1]);
     requireSameType(
         F.getLoweredType(leafTy).getASTType(),

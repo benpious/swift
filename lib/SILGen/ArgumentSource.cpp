@@ -163,15 +163,6 @@ ManagedValue ArgumentSource::materialize(SILGenFunction &SGF,
                                          AbstractionPattern origFormalType,
                                          SILType destType) && {
   auto substFormalType = getSubstRValueType();
-    auto &errs = llvm::errs();
-    errs << "BEN: materializing\n";
-    destType.getObjectType().print(errs);
-    errs << "\n";
-    substFormalType.print(errs);
-    errs << "\n";
-    errs << SGF.getLoweredType(origFormalType,
-                               substFormalType).getObjectType();
-    errs << "\n";
   assert(!destType || destType.getObjectType() ==
                SGF.getLoweredType(origFormalType,
                                   substFormalType).getObjectType());

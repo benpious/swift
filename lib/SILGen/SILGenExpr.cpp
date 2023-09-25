@@ -2174,20 +2174,15 @@ RValue RValueEmitter::visitEnumIsCaseExpr(EnumIsCaseExpr *E,
 
 RValue RValueEmitter::visitSingleValueStmtExpr(SingleValueStmtExpr *E,
                                                SGFContext C) {
-    auto &errs = llvm::errs();
-    errs << "emitting single value\n";
   // A void SingleValueStmtExpr either only has Void expression branches, or
   // we've decided that it should have purely statement semantics. In either
   // case, we can just emit the statement as-is, and produce the void rvalue.
   if (E->getType()->isVoid()) {
-      errs << "is void\n";
     SGF.emitStmt(E->getStmt());
-      errs << "emitted statement\n";
     return SGF.emitEmptyTupleRValue(E, C);
   }
   auto &lowering = SGF.getTypeLowering(E->getType());
   auto resultAddr = SGF.emitTemporaryAllocation(E, lowering.getLoweredType());
-    errs << "got result addr\n";
 
   // This won't give us a useful diagnostic if the result doesn't end up
   // initialized ("variable '<unknown>' used before being initialized"), but it
@@ -2196,19 +2191,15 @@ RValue RValueEmitter::visitSingleValueStmtExpr(SingleValueStmtExpr *E,
   resultAddr = SGF.B.createMarkUninitialized(
       E, resultAddr, MarkUninitializedInst::Kind::Var);
   KnownAddressInitialization init(resultAddr);
-    errs << "12\n";
   // Collect the target exprs that will be used for initialization.
   SmallVector<Expr *, 4> scratch;
   SILGenFunction::SingleValueStmtInitialization initInfo(&init);
   for (auto *E : E->getSingleExprBranches(scratch))
     initInfo.Exprs.insert(E);
-    errs << "14\n";
   // Push the initialization for branches of the statement to initialize into.
   SGF.SingleValueStmtInitStack.push_back(std::move(initInfo));
-    errs << "17\n";
   SWIFT_DEFER { SGF.SingleValueStmtInitStack.pop_back(); };
   SGF.emitStmt(E->getStmt());
-    errs << "18\n";
   return RValue(SGF, E, SGF.emitManagedRValueWithCleanup(resultAddr));
 }
 
@@ -2970,10 +2961,6 @@ static SILFunction *getOrCreateKeyPathFunction(SILGenModule &SGM,
                          CanType baseType,
                          CanType propertyType,
                          CanType returnTy) {
-    auto &errs = llvm::errs();
-    errs << "Ben: return Ty: ";
-    returnTy.print(errs);
-    errs << "\n";
   auto genericSig =
       genericEnv ? genericEnv->getGenericSignature().getCanonicalSignature()
                  : nullptr;
@@ -3088,13 +3075,9 @@ static SILFunction *getOrCreateKeyPathFunction(SILGenModule &SGM,
     auto canTy = CanFunctionType::get(ArrayRefView<AnyFunctionType::Param, AnyFunctionType::CanParam, AnyFunctionType::CanParam::getFromParam, true>(params),
                                       resultArgTy.getASTType())
     .withExtInfo(ASTExtInfo()); // TODO: this probably doesn't always work
-    errs << "BEN: subs canTy\n";
-    canTy.dump(errs);
-    errs << "BEN: done with subs canTy";
     auto baseSubstValue = emitKeyPathRValueBase(subSGF, function,
                                                 loc, baseArg,
                                                 baseType, subs);
-    errs << "BEN: resultRvalue\n";
     resultRValue = subSGF.emitApplyKeypathFunction(loc,
                                                    baseSubstValue,
                                                    function,
@@ -3102,38 +3085,24 @@ static SILFunction *getOrCreateKeyPathFunction(SILGenModule &SGM,
                                                    CanFunctionType(canTy),
                                                    subs,
                                                    subscriptIndices);
-    errs << "BEN: done with resultRvalue\n";
     resultSubst = std::move(resultRValue).getAsSingleValue(subSGF, loc);
-    errs << "BEN: done with getAsSingle\n";
   }
 
     if (resultSubst.getType().getAddressType() != resultArgTy) {
-        errs << "BEN: resultSubst\n";
-        resultSubst.getType().getAddressType().print(errs);
-        errs << "\n";
-        resultArgTy.print(errs);
-        errs << "\n";
-        errs << "\n";
         resultSubst = subSGF.emitSubstToOrigValue(loc, resultSubst,
                                                   AbstractionPattern::getOpaque(),
                                                   propertyType);
-        errs << "BEN: done with emit subst\n";
     }
 
   if (SGM.M.useLoweredAddresses()) {
-    errs << "BEN: forwarding into\n";
     resultSubst.forwardInto(subSGF, loc, resultArg);
     scope.pop();
 
-    errs << "BEN: empty tuple\n";
     subSGF.B.createReturn(loc, subSGF.emitEmptyTuple(loc));
-    errs << "BEN: finished empty tuple\n";
   } else {
     auto result = resultSubst.forward(subSGF);
     scope.pop();
-    errs << "BEN: create return\n";
     subSGF.B.createReturn(loc, result);
-    errs << "BEN: return created\n";
   }
 
   SGM.emitLazyConformancesForFunction(thunk);
@@ -3991,8 +3960,6 @@ SILGenModule::emitKeyPathComponentForFunctionDecl(SILLocation loc,
                                               ArrayRef<ProtocolConformanceRef> indexHashables,
                                                   CanType baseTy
                                               ) {
-    auto &errs = llvm::errs();
-    errs << "BEN: emitting for kp\n";
     // TODO: not clear if the resilience/external stuff matters in the
     // context of functions.
     AbstractStorageDecl *externalDecl = nullptr;
@@ -4002,10 +3969,8 @@ SILGenModule::emitKeyPathComponentForFunctionDecl(SILLocation loc,
       decl->getInterfaceType()->castTo<AnyFunctionType>();
     if (auto genSubscriptTy = baseSubscriptTy->getAs<GenericFunctionType>())
       baseSubscriptTy = genSubscriptTy->substGenericArgs(subs);
-    errs << "BEN: trying cast 399 kp\n";
     auto baseSubscriptInterfaceTy = cast<AnyFunctionType>(
       baseSubscriptTy->mapTypeOutOfContext()->getCanonicalType());
-    errs << "BEN: trying cast 399 done\n";
     auto componentTy = baseSubscriptInterfaceTy.getResult();
     if (decl->getAttrs().hasAttribute<OptionalAttr>()) {
       // The component type for an @objc optional requirement needs to be
@@ -4023,14 +3988,12 @@ SILGenModule::emitKeyPathComponentForFunctionDecl(SILLocation loc,
     lowerKeyPathSubscriptIndexPatterns(indexPatterns,
                                        indexTypes, indexHashables,
                                        baseOperand);
-    errs << "key path equals and hash\n";
     getOrCreateKeyPathEqualsAndHash(*this, loc,
              needsGenericContext ? genericEnv : nullptr,
              expansion,
              indexPatterns,
              indexEquals, indexHash);
     auto indexPatternsCopy = getASTContext().AllocateCopy(indexPatterns);
-    errs << "create function\n";
     // TODO: this breaks non dynamic member lookup
 //    auto returnTy = componentTy;
     auto returnTy = cast<AnyFunctionType>(componentTy->mapTypeOutOfContext()->getCanonicalType())->getResult()->getCanonicalType();
@@ -4041,9 +4004,7 @@ SILGenModule::emitKeyPathComponentForFunctionDecl(SILLocation loc,
              indexTypes,
              baseTy, componentTy,
              returnTy);
-    errs << "function created\n";
     auto id = KeyPathPatternComponent::ComputedPropertyId(getter);
-    errs << "made id\n";
     auto result = KeyPathPatternComponent::forComputedGettableProperty(id,
                                                          getter,
                                                          indexPatternsCopy,
@@ -4052,7 +4013,6 @@ SILGenModule::emitKeyPathComponentForFunctionDecl(SILLocation loc,
                                                          externalDecl,
                                                          externalSubs,
                                                          returnTy);
-    errs << "made component\n";
     return result;
 }
 
@@ -4291,7 +4251,6 @@ SILGenModule::emitKeyPathComponentForDecl(SILLocation loc,
 }
 
 RValue RValueEmitter::visitKeyPathExpr(KeyPathExpr *E, SGFContext C) {
-    auto &errs = llvm::errs();
   if (E->isObjC()) {
     return visit(E->getObjCStringLiteralExpr(), C);
   }
@@ -4300,11 +4259,8 @@ RValue RValueEmitter::visitKeyPathExpr(KeyPathExpr *E, SGFContext C) {
   // subscript indexes.
   SmallVector<KeyPathPatternComponent, 4> loweredComponents;
   auto loweredTy = SGF.getLoweredType(E->getType());
-    errs << "casting\n";
-    E->getType()->dump(errs);
   CanType rootTy = E->getType()->castTo<BoundGenericType>()->getGenericArgs()[0]
     ->getCanonicalType();
-    errs << "past the cast\n";
   bool needsGenericContext = false;
   if (rootTy->hasArchetype()) {
     needsGenericContext = true;
@@ -4315,7 +4271,6 @@ RValue RValueEmitter::visitKeyPathExpr(KeyPathExpr *E, SGFContext C) {
   SmallVector<SILValue, 4> operands;
 
   for (auto &component : E->getComponents()) {
-      errs << "BEN: an component\n";
     switch (auto kind = component.getKind()) {
     case KeyPathExpr::Component::Kind::Function: {
         auto decl = cast<FuncDecl>(component.getDeclRef().getDecl());
@@ -4331,10 +4286,7 @@ RValue RValueEmitter::visitKeyPathExpr(KeyPathExpr *E, SGFContext C) {
                                                 component.getSubscriptIndexHashableConformances(),
                                                 baseTy
                                                 ));
-        errs << "BEN: emitted\n";
         baseTy = loweredComponents.back().getComponentType();
-        errs << "BEN: basety set\n";
-        baseTy.print(errs);
         break;
     }
     case KeyPathExpr::Component::Kind::Property:
@@ -4427,12 +4379,10 @@ RValue RValueEmitter::visitKeyPathExpr(KeyPathExpr *E, SGFContext C) {
       break;
     }
   }
-    errs << "finished making components";
   StringRef objcString;
   if (auto objcExpr = dyn_cast_or_null<StringLiteralExpr>
                                                 (E->getObjCStringLiteralExpr()))
     objcString = objcExpr->getValue();
-    errs << "finished casting objc string";
   auto pattern = KeyPathPattern::get(SGF.SGM.M,
                                      needsGenericContext
                                        ? SGF.F.getLoweredFunctionType()

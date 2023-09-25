@@ -331,25 +331,7 @@ public:
 
   /// Returns true if this is a non-null and completed argument list.
   bool isValid() const {
-      auto &errs = llvm::errs();
     assert(!isNull());
-      if (Arguments.size() != Params.size()) {
-          errs << Arguments.size();
-          errs << "\n";
-          errs << Params.size();
-          errs << "\n";
-          errs << "failed, size isn't the same\n";
-          for (auto param : Params) {
-              param.getPlainType().dump(errs);
-              errs << "\n";
-          }
-          errs << "BEN: dumping args in isValid\n";
-          for (auto &param : Arguments) {
-              param.dump(errs);
-              errs << "\n";
-          }
-          errs << "finished\n";
-      }
     return Arguments.size() == Params.size();
   }
 

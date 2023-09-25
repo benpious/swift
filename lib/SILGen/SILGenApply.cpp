@@ -590,10 +590,6 @@ public:
                                       Optional<SILDeclRef> constant,
                                       SILType formalFnType) const & {
     CalleeTypeInfo result;
-//      auto &e = llvm::errs();
-//      e << "BEN: ";
-//      formalFnType.print(e);
-//      e << "\n";
     result.substFnType =
         formalFnType.castTo<SILFunctionType>()->substGenericArgs(
             SGF.SGM.M, Substitutions, SGF.getTypeExpansionContext());
@@ -5292,24 +5288,20 @@ CallEmission CallEmission::forApplyKeyPathFunction(SILLocation loc,
                                             canTy,
                                             std::move(base)));
     Callee callee = [&] {
-        auto &err = llvm::errs();
         // from getBaseAccessorFunctionRef
         auto *decl = cast<AbstractFunctionDecl>(constant.getDecl());
         if (isa<ProtocolDecl>(decl->getDeclContext())) {
-            err << "BEN: for witness\n";
             return Callee::forWitnessMethod(SGF,
                                             selfSource.getSubstRValueType(),
                                             constant, subs, loc);
         } else {
             switch (getMethodDispatch(decl)) {
                 case MethodDispatch::Class:
-                    err << "BEN: for class\n";
                     return Callee::forClassMethod(SGF,
                                                   constant,
                                                   subs,
                                                   loc);
                 case MethodDispatch::Static:
-                    err << "BEN: for static\n";
                     return Callee::forDirect(SGF,
                                              constant,
                                              subs,

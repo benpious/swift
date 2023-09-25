@@ -31,17 +31,10 @@ class Controller {
     func f() {
         
     }
-    
-    subscript(i: Int) -> () {
-        ()
-    }
-            
+                
 }
 
 let c = Controller()
-//c[8]
-//c.f()
-// CHECK: g
 c.abc()
 //_ = c.a
 //Controller().abc()
